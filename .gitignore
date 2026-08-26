@@ -1,0 +1,4 @@
+build/
+*.srm
+roms/*.sfc
+roms/*.smc
