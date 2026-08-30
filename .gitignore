@@ -1,4 +1,7 @@
 build/
-*.srm
+
 roms/*.sfc
 roms/*.smc
+*.srm
+
+temp.md
