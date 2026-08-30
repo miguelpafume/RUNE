@@ -3,7 +3,7 @@
 #include <iostream>
 
 int main(int argc, char** argv) {
-    if (argv[1] == nullptr) {
+    if (argc < 2) {
         std::cerr << "ERROR: No ROM path detected." << std::endl;
         return 1;
     }

@@ -6,11 +6,13 @@
 #include <vector>
 #include <array>
 
-namespace RUNE {
+namespace SNES {
 
-class Snes {
+using RUNE::U8;
+
+class System {
 public:
-    explicit Snes();
+    explicit System();
 
     void loadRom(const std::string& romPath);
     void runFrame();
@@ -19,8 +21,8 @@ public:
 
 private:
     //TEMP
-    std::vector<U8> m_framebuffer = std::vector<U8>(SNES::VIDEO_HEIGHT * SNES::VIDEO_WIDTH * 4, 0xFF);
+    const std::vector<U8> m_framebuffer = std::vector<U8>(VIDEO_HEIGHT * VIDEO_WIDTH * 4, 0xFF);
 
 };
 
-} // namespace RUNE
+} // namespace SNES

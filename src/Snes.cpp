@@ -1,19 +1,21 @@
 #include "Snes.hpp"
 
-namespace RUNE {
+using namespace RUNE;
+
+namespace SNES {
     
-Snes::Snes() {
+System::System() {
 }
 
-const U8* Snes::framebuffer() {
+const U8* System::framebuffer() {
 
     return m_framebuffer.data();
 }
 
-void Snes::loadRom(const std::string &romPath) {
+void System::loadRom(const std::string &romPath) {
 }
 
-void Snes::runFrame() {
+void System::runFrame() {
 }
 
-} //namespace RUNE
+} //namespace SNES

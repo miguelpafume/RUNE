@@ -18,7 +18,6 @@
 class SnesApp {
 public:
     explicit SnesApp(const std::string& romPath);
-    ~SnesApp() = default;
 
     void run();
 
@@ -28,7 +27,7 @@ private:
     void pollInput();
 
     MAGE::Engine m_engine;
-    RUNE::Snes m_snes;
+    SNES::System m_snes;
 
     std::vector<MAGE::GameObject> m_gameObjects;
     std::unique_ptr<MAGE::Texture> m_displayTexture;
