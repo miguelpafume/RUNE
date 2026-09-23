@@ -1,7 +1,13 @@
 build/
 
+#Tests
+tests/data/*
+!tests/data/README.md
+
+# ROMS
 roms/*.sfc
 roms/*.smc
 *.srm
 
+# Other
 temp.md
