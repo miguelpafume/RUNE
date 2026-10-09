@@ -24,7 +24,7 @@ struct MemoryMismatch {
 };
 
 struct AccessMismatch {
-	std::size_t address {};
+	std::size_t index {};
 	std::string expected {};
 	std::string actual {};
 };

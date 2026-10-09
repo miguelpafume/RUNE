@@ -67,20 +67,21 @@ CycleEntry readCycleEntry(const nlm::json& cycle) {
 
 	CycleEntry entry {};
 
-	entry.address = cycle.at(CELL_ADDRESS).get<U32>();
+	if (!cycle.at(CELL_ADDRESS).is_null())
+		entry.address = cycle.at(CELL_ADDRESS).get<U32>();
 
 	if (!cycle.at(CELL_VALUE).is_null()) {
 		entry.value = cycle.at(CELL_VALUE).get<U8>();
 	}
 
-	entry.vda = pins[ PIN_VDA ] == 'd';
-	entry.vpa = pins[ PIN_VPA ] == 'p';
-	entry.vpb = pins[ PIN_VPB ] == 'v';
-	entry.isWrite = pins[ PIN_RW ] == 'w';
-	entry.emulation = pins[ PIN_E ] == 'e';
-	entry.flagM = pins[ PIN_M ] == 'm';
-	entry.flagX = pins[ PIN_X ] == 'x';
-	entry.memoryLock = pins[ PIN_MLB ] == 'l';
+	entry.vda = pins[PIN_VDA] == 'd';
+	entry.vpa = pins[PIN_VPA] == 'p';
+	entry.vpb = pins[PIN_VPB] == 'v';
+	entry.isWrite = pins[PIN_RW] == 'w';
+	entry.emulation = pins[PIN_E] == 'e';
+	entry.flagM = pins[PIN_M] == 'm';
+	entry.flagX = pins[PIN_X] == 'x';
+	entry.memoryLock = pins[PIN_MLB] == 'l';
 
 	return entry;
 }

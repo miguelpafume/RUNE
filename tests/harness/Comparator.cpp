@@ -69,10 +69,13 @@ std::string formatPins(bool vda, bool vpa, bool vpb, bool isWrite, bool emulatio
 	return text;
 }
 
-std::string formatValue(const std::optional<U8>& value) { return value ? toHex(*value) : std::string {"--"}; }
+template <typename T>
+std::string formatValue(const std::optional<T>& value) {
+	return value ? toHex(static_cast<U32>(*value)) : std::string {"--"};
+}
 
 std::string formatCycleEntry(const CycleEntry& cycle) {
-	return "$" + toHex(cycle.address) + " " + formatValue(cycle.value) + " " +
+	return "$" + formatValue(cycle.address) + " " + formatValue(cycle.value) + " " +
 	       formatPins(cycle.vda, cycle.vpa, cycle.vpb, cycle.isWrite, cycle.emulation, cycle.flagM, cycle.flagX, cycle.memoryLock);
 }
 
@@ -152,7 +155,9 @@ std::vector<AccessMismatch> compareAccesses(const std::vector<CycleEntry>& expec
 
 		pinsFromCycleKind(a.cycleKind, vda, vpa, vpb);
 
-		const bool matches = e.address == a.address && e.value == a.value && e.vda == vda && e.vpa == vpa && e.vpb == vpb &&
+		const bool addressMatches = !e.address || *e.address == a.address;
+
+		const bool matches = addressMatches && e.value == a.value && e.vda == vda && e.vpa == vpa && e.vpb == vpb &&
 		                     e.isWrite == a.isWrite && e.emulation == a.emulation && e.flagM == a.flagM && e.flagX == a.flagX &&
 		                     e.memoryLock == a.memoryLock;
 

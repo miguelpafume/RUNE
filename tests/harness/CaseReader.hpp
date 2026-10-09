@@ -16,7 +16,7 @@ struct MemoryCell {
 };
 
 struct CycleEntry {
-	U32 address {};
+	std::optional<U32> address {};
 
 	std::optional<U8> value {};
 
