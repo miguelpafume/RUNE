@@ -41,12 +41,15 @@ public:
 	U8 fetchOpcode(U32 address) { return readCycle(address, CycleKind::OpcodeFetch); }
 	U8 fetchOperand(U32 address) { return readCycle(address, CycleKind::OperandFetch); }
 	U8 fetchVector(U32 address) { return readCycle(address, CycleKind::VectorFetch); }
-	U8 readData(U32 address, U8 value, bool memoryLock = false) { return readCycle(address, CycleKind::DataAccess, memoryLock); }
+	U8 readData(U32 address, bool memoryLock = false) { return readCycle(address, CycleKind::DataAccess, memoryLock); }
 
 	void writeData(U32 address, U8 value, bool memoryLock = false);
 	void internalCycle(U32 address, bool memoryLock = false);
 
 	void setFlags(bool emulation, bool flagM, bool flagX);
+
+	void invalidWrite(U32 address, U8 value, bool memoryLock = false);
+	void haltedCycle();
 
 	// Test mode only
 	void                       poke(U32 address, U8 value);

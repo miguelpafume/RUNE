@@ -67,7 +67,21 @@ void Bus::internalCycle(U32 address, bool memoryLock) {
 	if (m_mode == Mode::Test) {
 		const U32 target = address & ADDRESS_MASK;
 
-		m_accessLog.push_back({target, std::nullopt, CycleKind::Internal, false});
+		m_accessLog.push_back({target, std::nullopt, CycleKind::Internal, false, m_flagE, m_flagM, m_flagX, memoryLock});
+	}
+}
+
+void Bus::invalidWrite(U32 address, U8 value, bool memoryLock) {
+	if (m_mode == Mode::Test) {
+		const U32 target = address & ADDRESS_MASK;
+
+		m_accessLog.push_back({target, value, CycleKind::Internal, true, m_flagE, m_flagM, m_flagX, memoryLock});
+	}
+}
+
+void Bus::haltedCycle() {
+	if (m_mode == Mode::Test) {
+		m_accessLog.push_back({0, std::nullopt, CycleKind::Internal});
 	}
 }
 
