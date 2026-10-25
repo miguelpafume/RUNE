@@ -321,6 +321,50 @@ private:
 	template <bool W8>
 	Word<W8> opSTZ();
 
+	// Logic
+
+	template <bool W8>
+	void opORA(Word<W8> value);
+
+	template <bool W8>
+	void opAND(Word<W8> value);
+
+	template <bool W8>
+	void opEOR(Word<W8> value);
+
+	// BIT: Bit test
+
+	template <bool W8>
+	void opBIT(Word<W8> value);
+
+	template <bool W8>
+	void opBITImmediate(Word<W8> value);
+
+	// CP: Compare
+
+	template <bool W8>
+	void compare(Word<W8> left, Word<W8> right);
+
+	template <bool W8>
+	void opCMP(Word<W8> value);
+
+	template <bool W8>
+	void opCPX(Word<W8> value);
+
+	template <bool W8>
+	void opCPY(Word<W8> value);
+
+	// ADC and SBC: Add and subtract with carry
+
+	template <bool W8>
+	void addWithCarry(Word<W8> operand, bool subtract);
+
+	template <bool W8>
+	void opADC(Word<W8> value);
+
+	template <bool W8>
+	void opSBC(Word<W8> value);
+
 	// CPUInstructions.inl: whole instructions, no pattern + operation
 
 	// Family 2: transfers

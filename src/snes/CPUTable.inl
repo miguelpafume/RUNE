@@ -2,8 +2,8 @@
 
 namespace SNES {
 
-// Family 1 opcodes are a pattern (bus cycles) + an operation (the math)
-// LDA, STA and STZ use the M width, LDX, LDY, STX and STY use the X width
+// Families 1 and 5 are a pattern (bus cycles) + an operation (the math)
+// Instructions on A use the M width, the ones on X and Y use the X width
 template <bool M8, bool X8>
 constexpr CPU::Table CPU::buildTable() {
 	Table t {};
@@ -127,6 +127,131 @@ constexpr CPU::Table CPU::buildTable() {
 	t[0x28] = &CPU::instructionPLP;                // PLP
 	t[0x2B] = &CPU::instructionPLD;                // PLD
 	t[0xAB] = &CPU::instructionPLB;                // PLB
+
+	// Family 5, logic
+
+	// ORA
+	t[0x01] = &CPU::directIndexedIndirectRead<M8, &CPU::opORA<M8>>;         // ORA (dp,X)
+	t[0x03] = &CPU::stackRelativeRead<M8, &CPU::opORA<M8>>;                 // ORA sr,S
+	t[0x05] = &CPU::directRead<M8, &CPU::opORA<M8>>;                        // ORA dp
+	t[0x07] = &CPU::directIndirectLongRead<M8, &CPU::opORA<M8>>;            // ORA [dp]
+	t[0x09] = &CPU::immediateRead<M8, &CPU::opORA<M8>>;                     // ORA #
+	t[0x0D] = &CPU::absoluteRead<M8, &CPU::opORA<M8>>;                      // ORA abs
+	t[0x0F] = &CPU::absoluteLongRead<M8, &CPU::opORA<M8>>;                  // ORA long
+	t[0x11] = &CPU::directIndirectIndexedRead<M8, X8, &CPU::opORA<M8>>;     // ORA (dp),Y
+	t[0x12] = &CPU::directIndirectRead<M8, &CPU::opORA<M8>>;                // ORA (dp)
+	t[0x13] = &CPU::stackRelativeIndirectIndexedRead<M8, &CPU::opORA<M8>>;  // ORA (sr,S),Y
+	t[0x15] = &CPU::directIndexedRead<M8, Index::X, &CPU::opORA<M8>>;       // ORA dp,X
+	t[0x17] = &CPU::directIndirectLongIndexedRead<M8, &CPU::opORA<M8>>;     // ORA [dp],Y
+	t[0x19] = &CPU::absoluteIndexedRead<M8, X8, Index::Y, &CPU::opORA<M8>>; // ORA abs,Y
+	t[0x1D] = &CPU::absoluteIndexedRead<M8, X8, Index::X, &CPU::opORA<M8>>; // ORA abs,X
+	t[0x1F] = &CPU::absoluteLongIndexedRead<M8, &CPU::opORA<M8>>;           // ORA long,X
+
+	// AND
+	t[0x21] = &CPU::directIndexedIndirectRead<M8, &CPU::opAND<M8>>;         // AND (dp,X)
+	t[0x23] = &CPU::stackRelativeRead<M8, &CPU::opAND<M8>>;                 // AND sr,S
+	t[0x25] = &CPU::directRead<M8, &CPU::opAND<M8>>;                        // AND dp
+	t[0x27] = &CPU::directIndirectLongRead<M8, &CPU::opAND<M8>>;            // AND [dp]
+	t[0x29] = &CPU::immediateRead<M8, &CPU::opAND<M8>>;                     // AND #
+	t[0x2D] = &CPU::absoluteRead<M8, &CPU::opAND<M8>>;                      // AND abs
+	t[0x2F] = &CPU::absoluteLongRead<M8, &CPU::opAND<M8>>;                  // AND long
+	t[0x31] = &CPU::directIndirectIndexedRead<M8, X8, &CPU::opAND<M8>>;     // AND (dp),Y
+	t[0x32] = &CPU::directIndirectRead<M8, &CPU::opAND<M8>>;                // AND (dp)
+	t[0x33] = &CPU::stackRelativeIndirectIndexedRead<M8, &CPU::opAND<M8>>;  // AND (sr,S),Y
+	t[0x35] = &CPU::directIndexedRead<M8, Index::X, &CPU::opAND<M8>>;       // AND dp,X
+	t[0x37] = &CPU::directIndirectLongIndexedRead<M8, &CPU::opAND<M8>>;     // AND [dp],Y
+	t[0x39] = &CPU::absoluteIndexedRead<M8, X8, Index::Y, &CPU::opAND<M8>>; // AND abs,Y
+	t[0x3D] = &CPU::absoluteIndexedRead<M8, X8, Index::X, &CPU::opAND<M8>>; // AND abs,X
+	t[0x3F] = &CPU::absoluteLongIndexedRead<M8, &CPU::opAND<M8>>;           // AND long,X
+
+	// EOR
+	t[0x41] = &CPU::directIndexedIndirectRead<M8, &CPU::opEOR<M8>>;         // EOR (dp,X)
+	t[0x43] = &CPU::stackRelativeRead<M8, &CPU::opEOR<M8>>;                 // EOR sr,S
+	t[0x45] = &CPU::directRead<M8, &CPU::opEOR<M8>>;                        // EOR dp
+	t[0x47] = &CPU::directIndirectLongRead<M8, &CPU::opEOR<M8>>;            // EOR [dp]
+	t[0x49] = &CPU::immediateRead<M8, &CPU::opEOR<M8>>;                     // EOR #
+	t[0x4D] = &CPU::absoluteRead<M8, &CPU::opEOR<M8>>;                      // EOR abs
+	t[0x4F] = &CPU::absoluteLongRead<M8, &CPU::opEOR<M8>>;                  // EOR long
+	t[0x51] = &CPU::directIndirectIndexedRead<M8, X8, &CPU::opEOR<M8>>;     // EOR (dp),Y
+	t[0x52] = &CPU::directIndirectRead<M8, &CPU::opEOR<M8>>;                // EOR (dp)
+	t[0x53] = &CPU::stackRelativeIndirectIndexedRead<M8, &CPU::opEOR<M8>>;  // EOR (sr,S),Y
+	t[0x55] = &CPU::directIndexedRead<M8, Index::X, &CPU::opEOR<M8>>;       // EOR dp,X
+	t[0x57] = &CPU::directIndirectLongIndexedRead<M8, &CPU::opEOR<M8>>;     // EOR [dp],Y
+	t[0x59] = &CPU::absoluteIndexedRead<M8, X8, Index::Y, &CPU::opEOR<M8>>; // EOR abs,Y
+	t[0x5D] = &CPU::absoluteIndexedRead<M8, X8, Index::X, &CPU::opEOR<M8>>; // EOR abs,X
+	t[0x5F] = &CPU::absoluteLongIndexedRead<M8, &CPU::opEOR<M8>>;           // EOR long,X
+
+	// BIT
+	t[0x24] = &CPU::directRead<M8, &CPU::opBIT<M8>>;                        // BIT dp
+	t[0x2C] = &CPU::absoluteRead<M8, &CPU::opBIT<M8>>;                      // BIT abs
+	t[0x34] = &CPU::directIndexedRead<M8, Index::X, &CPU::opBIT<M8>>;       // BIT dp,X
+	t[0x3C] = &CPU::absoluteIndexedRead<M8, X8, Index::X, &CPU::opBIT<M8>>; // BIT abs,X
+	t[0x89] = &CPU::immediateRead<M8, &CPU::opBITImmediate<M8>>;            // BIT #
+
+	// Family 5, compare
+
+	// CMP
+	t[0xC1] = &CPU::directIndexedIndirectRead<M8, &CPU::opCMP<M8>>;         // CMP (dp,X)
+	t[0xC3] = &CPU::stackRelativeRead<M8, &CPU::opCMP<M8>>;                 // CMP sr,S
+	t[0xC5] = &CPU::directRead<M8, &CPU::opCMP<M8>>;                        // CMP dp
+	t[0xC7] = &CPU::directIndirectLongRead<M8, &CPU::opCMP<M8>>;            // CMP [dp]
+	t[0xC9] = &CPU::immediateRead<M8, &CPU::opCMP<M8>>;                     // CMP #
+	t[0xCD] = &CPU::absoluteRead<M8, &CPU::opCMP<M8>>;                      // CMP abs
+	t[0xCF] = &CPU::absoluteLongRead<M8, &CPU::opCMP<M8>>;                  // CMP long
+	t[0xD1] = &CPU::directIndirectIndexedRead<M8, X8, &CPU::opCMP<M8>>;     // CMP (dp),Y
+	t[0xD2] = &CPU::directIndirectRead<M8, &CPU::opCMP<M8>>;                // CMP (dp)
+	t[0xD3] = &CPU::stackRelativeIndirectIndexedRead<M8, &CPU::opCMP<M8>>;  // CMP (sr,S),Y
+	t[0xD5] = &CPU::directIndexedRead<M8, Index::X, &CPU::opCMP<M8>>;       // CMP dp,X
+	t[0xD7] = &CPU::directIndirectLongIndexedRead<M8, &CPU::opCMP<M8>>;     // CMP [dp],Y
+	t[0xD9] = &CPU::absoluteIndexedRead<M8, X8, Index::Y, &CPU::opCMP<M8>>; // CMP abs,Y
+	t[0xDD] = &CPU::absoluteIndexedRead<M8, X8, Index::X, &CPU::opCMP<M8>>; // CMP abs,X
+	t[0xDF] = &CPU::absoluteLongIndexedRead<M8, &CPU::opCMP<M8>>;           // CMP long,X
+
+	// CPX
+	t[0xE0] = &CPU::immediateRead<X8, &CPU::opCPX<X8>>; // CPX #
+	t[0xE4] = &CPU::directRead<X8, &CPU::opCPX<X8>>;    // CPX dp
+	t[0xEC] = &CPU::absoluteRead<X8, &CPU::opCPX<X8>>;  // CPX abs
+
+	// CPY
+	t[0xC0] = &CPU::immediateRead<X8, &CPU::opCPY<X8>>; // CPY #
+	t[0xC4] = &CPU::directRead<X8, &CPU::opCPY<X8>>;    // CPY dp
+	t[0xCC] = &CPU::absoluteRead<X8, &CPU::opCPY<X8>>;  // CPY abs
+
+	// Family 5, arithmetic
+
+	// ADC
+	t[0x61] = &CPU::directIndexedIndirectRead<M8, &CPU::opADC<M8>>;         // ADC (dp,X)
+	t[0x63] = &CPU::stackRelativeRead<M8, &CPU::opADC<M8>>;                 // ADC sr,S
+	t[0x65] = &CPU::directRead<M8, &CPU::opADC<M8>>;                        // ADC dp
+	t[0x67] = &CPU::directIndirectLongRead<M8, &CPU::opADC<M8>>;            // ADC [dp]
+	t[0x69] = &CPU::immediateRead<M8, &CPU::opADC<M8>>;                     // ADC #
+	t[0x6D] = &CPU::absoluteRead<M8, &CPU::opADC<M8>>;                      // ADC abs
+	t[0x6F] = &CPU::absoluteLongRead<M8, &CPU::opADC<M8>>;                  // ADC long
+	t[0x71] = &CPU::directIndirectIndexedRead<M8, X8, &CPU::opADC<M8>>;     // ADC (dp),Y
+	t[0x72] = &CPU::directIndirectRead<M8, &CPU::opADC<M8>>;                // ADC (dp)
+	t[0x73] = &CPU::stackRelativeIndirectIndexedRead<M8, &CPU::opADC<M8>>;  // ADC (sr,S),Y
+	t[0x75] = &CPU::directIndexedRead<M8, Index::X, &CPU::opADC<M8>>;       // ADC dp,X
+	t[0x77] = &CPU::directIndirectLongIndexedRead<M8, &CPU::opADC<M8>>;     // ADC [dp],Y
+	t[0x79] = &CPU::absoluteIndexedRead<M8, X8, Index::Y, &CPU::opADC<M8>>; // ADC abs,Y
+	t[0x7D] = &CPU::absoluteIndexedRead<M8, X8, Index::X, &CPU::opADC<M8>>; // ADC abs,X
+	t[0x7F] = &CPU::absoluteLongIndexedRead<M8, &CPU::opADC<M8>>;           // ADC long,X
+
+	// SBC
+	t[0xE1] = &CPU::directIndexedIndirectRead<M8, &CPU::opSBC<M8>>;         // SBC (dp,X)
+	t[0xE3] = &CPU::stackRelativeRead<M8, &CPU::opSBC<M8>>;                 // SBC sr,S
+	t[0xE5] = &CPU::directRead<M8, &CPU::opSBC<M8>>;                        // SBC dp
+	t[0xE7] = &CPU::directIndirectLongRead<M8, &CPU::opSBC<M8>>;            // SBC [dp]
+	t[0xE9] = &CPU::immediateRead<M8, &CPU::opSBC<M8>>;                     // SBC #
+	t[0xED] = &CPU::absoluteRead<M8, &CPU::opSBC<M8>>;                      // SBC abs
+	t[0xEF] = &CPU::absoluteLongRead<M8, &CPU::opSBC<M8>>;                  // SBC long
+	t[0xF1] = &CPU::directIndirectIndexedRead<M8, X8, &CPU::opSBC<M8>>;     // SBC (dp),Y
+	t[0xF2] = &CPU::directIndirectRead<M8, &CPU::opSBC<M8>>;                // SBC (dp)
+	t[0xF3] = &CPU::stackRelativeIndirectIndexedRead<M8, &CPU::opSBC<M8>>;  // SBC (sr,S),Y
+	t[0xF5] = &CPU::directIndexedRead<M8, Index::X, &CPU::opSBC<M8>>;       // SBC dp,X
+	t[0xF7] = &CPU::directIndirectLongIndexedRead<M8, &CPU::opSBC<M8>>;     // SBC [dp],Y
+	t[0xF9] = &CPU::absoluteIndexedRead<M8, X8, Index::Y, &CPU::opSBC<M8>>; // SBC abs,Y
+	t[0xFD] = &CPU::absoluteIndexedRead<M8, X8, Index::X, &CPU::opSBC<M8>>; // SBC abs,X
+	t[0xFF] = &CPU::absoluteLongIndexedRead<M8, &CPU::opSBC<M8>>;           // SBC long,X
 
 	// If any opcode is left empty this throws, and a throw in constinit doesn't compile
 	for (const Handler handler : t) {
