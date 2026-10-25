@@ -77,6 +77,48 @@ U32 CPU::uncorrectedAddress(U32 base, U16 offset) { return (base & HIGH_BYTE_MAS
 // Adding the index changed the high byte (costs an extra cycle)
 bool CPU::crossesPage(U32 base, U16 offset) { return ((base + offset) & PAGE_MASK) != (base & PAGE_MASK); }
 
+// Stack
+// Push writes and then moves S down, pull moves S up and then reads
+
+// 6502 instructions keep S inside page $01 in emulation, even between two bytes
+void CPU::push(U8 value) {
+	write(m_registers.S, value);
+
+	if (m_registers.E) {
+		m_registers.S = EMULATION_STACK_PAGE | ((m_registers.S - 1) & LOW_BYTE_MASK);
+	} else {
+		m_registers.S--;
+	}
+}
+
+U8 CPU::pull() {
+	if (m_registers.E) {
+		m_registers.S = EMULATION_STACK_PAGE | ((m_registers.S + 1) & LOW_BYTE_MASK);
+	} else {
+		m_registers.S++;
+	}
+
+	return read(m_registers.S);
+}
+
+// The 65816 instructions move S in 16 bits so in emulation they can go out to page $00 or $02 while running
+void CPU::pushNative(U8 value) {
+	write(m_registers.S, value);
+	m_registers.S--;
+}
+
+U8 CPU::pullNative() {
+	m_registers.S++;
+	return read(m_registers.S);
+}
+
+// And when they finish, S goes back to page $01
+void CPU::endNativeStack() {
+	if (m_registers.E) {
+		m_registers.S = EMULATION_STACK_PAGE | (m_registers.S & LOW_BYTE_MASK);
+	}
+}
+
 // Operand locators
 // Each mode has its own rule for where the next operand byte is
 

@@ -159,7 +159,7 @@ private:
 	static U32  uncorrectedAddress(U32 base, U16 offset);
 	static bool crossesPage(U32 base, U16 offset);
 
-	// Stack
+	// Stack, the native ones skip the page $01 wrap until endNativeStack
 	void push(U8 value);
 	U8   pull();
 	void pushNative(U8 value);
@@ -296,7 +296,7 @@ private:
 
 	// CPUOperations.inl: opcodes
 
-	// LD : Load
+	// LD: Load
 
 	template <bool W8>
 	void opLDA(Word<W8> value);
@@ -307,7 +307,7 @@ private:
 	template <bool W8>
 	void opLDY(Word<W8> value);
 
-	// ST : Store
+	// ST: Store
 
 	template <bool W8>
 	Word<W8> opSTA();
@@ -320,6 +320,50 @@ private:
 
 	template <bool W8>
 	Word<W8> opSTZ();
+
+	// CPUInstructions.inl: whole instructions, no pattern + operation
+
+	// Family 2: transfers
+
+	template <bool W8, Register FROM, Register TO>
+	void transfer();
+
+	template <Register FROM>
+	void transferToS();
+
+	void instructionXBA();
+
+	// Family 3: flags and mode
+
+	template <U8 MASK, bool SET>
+	void changeFlag();
+
+	void instructionREP();
+	void instructionSEP();
+	void instructionXCE();
+
+	// Family 4: stack, 6502 instructions (push/pull)
+
+	template <bool W8, Register R>
+	void pushRegister();
+
+	void instructionPHP();
+	void instructionPHB();
+	void instructionPHK();
+
+	template <bool W8, Register R>
+	void pullRegister();
+
+	void instructionPLP();
+
+	// Family 4: stack, 65816 instructions (pushNative/pullNative)
+
+	void instructionPHD();
+	void instructionPEA();
+	void instructionPEI();
+	void instructionPER();
+	void instructionPLD();
+	void instructionPLB();
 };
 
 } // namespace SNES

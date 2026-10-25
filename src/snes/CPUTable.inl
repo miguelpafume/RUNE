@@ -2,7 +2,7 @@
 
 namespace SNES {
 
-// Each opcode is a pattern (bus cycles) + an operation (the math)
+// Family 1 opcodes are a pattern (bus cycles) + an operation (the math)
 // LDA, STA and STZ use the M width, LDX, LDY, STX and STY use the X width
 template <bool M8, bool X8>
 constexpr CPU::Table CPU::buildTable() {
@@ -76,6 +76,57 @@ constexpr CPU::Table CPU::buildTable() {
 	t[0x74] = &CPU::directIndexedWrite<M8, Index::X, &CPU::opSTZ<M8>>;   // STZ dp,X
 	t[0x9C] = &CPU::absoluteWrite<M8, &CPU::opSTZ<M8>>;                  // STZ abs
 	t[0x9E] = &CPU::absoluteIndexedWrite<M8, Index::X, &CPU::opSTZ<M8>>; // STZ abs,X
+
+	// Family 2, transfers
+
+	t[0xAA] = &CPU::transfer<X8, Register::A, Register::X>;    // TAX
+	t[0xA8] = &CPU::transfer<X8, Register::A, Register::Y>;    // TAY
+	t[0x9B] = &CPU::transfer<X8, Register::X, Register::Y>;    // TXY
+	t[0xBB] = &CPU::transfer<X8, Register::Y, Register::X>;    // TYX
+	t[0xBA] = &CPU::transfer<X8, Register::S, Register::X>;    // TSX
+	t[0x8A] = &CPU::transfer<M8, Register::X, Register::A>;    // TXA
+	t[0x98] = &CPU::transfer<M8, Register::Y, Register::A>;    // TYA
+	t[0x3B] = &CPU::transfer<false, Register::S, Register::A>; // TSC
+	t[0x5B] = &CPU::transfer<false, Register::A, Register::D>; // TCD
+	t[0x7B] = &CPU::transfer<false, Register::D, Register::A>; // TDC
+	t[0x1B] = &CPU::transferToS<Register::A>;                  // TCS
+	t[0x9A] = &CPU::transferToS<Register::X>;                  // TXS
+	t[0xEB] = &CPU::instructionXBA;                            // XBA
+
+	// Family 3, flags and mode
+
+	t[0x18] = &CPU::changeFlag<FLAG_C, false>; // CLC
+	t[0x38] = &CPU::changeFlag<FLAG_C, true>;  // SEC
+	t[0x58] = &CPU::changeFlag<FLAG_I, false>; // CLI
+	t[0x78] = &CPU::changeFlag<FLAG_I, true>;  // SEI
+	t[0xD8] = &CPU::changeFlag<FLAG_D, false>; // CLD
+	t[0xF8] = &CPU::changeFlag<FLAG_D, true>;  // SED
+	t[0xB8] = &CPU::changeFlag<FLAG_V, false>; // CLV
+	t[0xC2] = &CPU::instructionREP;            // REP
+	t[0xE2] = &CPU::instructionSEP;            // SEP
+	t[0xFB] = &CPU::instructionXCE;            // XCE
+
+	// Family 4, pushes
+
+	t[0x48] = &CPU::pushRegister<M8, Register::A>; // PHA
+	t[0xDA] = &CPU::pushRegister<X8, Register::X>; // PHX
+	t[0x5A] = &CPU::pushRegister<X8, Register::Y>; // PHY
+	t[0x08] = &CPU::instructionPHP;                // PHP
+	t[0x8B] = &CPU::instructionPHB;                // PHB
+	t[0x4B] = &CPU::instructionPHK;                // PHK
+	t[0x0B] = &CPU::instructionPHD;                // PHD
+	t[0xF4] = &CPU::instructionPEA;                // PEA
+	t[0xD4] = &CPU::instructionPEI;                // PEI
+	t[0x62] = &CPU::instructionPER;                // PER
+
+	// Family 4, pulls
+
+	t[0x68] = &CPU::pullRegister<M8, Register::A>; // PLA
+	t[0xFA] = &CPU::pullRegister<X8, Register::X>; // PLX
+	t[0x7A] = &CPU::pullRegister<X8, Register::Y>; // PLY
+	t[0x28] = &CPU::instructionPLP;                // PLP
+	t[0x2B] = &CPU::instructionPLD;                // PLD
+	t[0xAB] = &CPU::instructionPLB;                // PLB
 
 	// If any opcode is left empty this throws, and a throw in constinit doesn't compile
 	for (const Handler handler : t) {
