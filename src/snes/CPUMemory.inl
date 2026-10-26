@@ -186,4 +186,25 @@ void CPU::writeAt(Locator at, Word<W8> value) {
 	}
 }
 
+// Read-modify-write, every cycle here keeps MLB low
+// In emulation the internal cycle writes the old value back, like the 6502
+template <bool W8, auto Op, typename Locator>
+void CPU::modifyAt(Locator at) {
+	Word<W8> value = readAt<W8>(at, LOCK);
+
+	if (m_registers.E) {
+		m_bus.invalidWrite(at(0), static_cast<U8>(value), LOCK);
+	} else {
+		idle(at(W8 ? 0 : 1), LOCK);
+	}
+
+	value = (this->*Op)(value);
+
+	// High byte first, the opposite of writeAt
+	if constexpr (!W8)
+		write(at(1), static_cast<U8>(value >> 8), LOCK);
+
+	write(at(0), static_cast<U8>(value), LOCK);
+}
+
 } // namespace SNES

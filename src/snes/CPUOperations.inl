@@ -204,4 +204,98 @@ void CPU::opSBC(Word<W8> value) {
 	addWithCarry<W8>(static_cast<Word<W8>>(~value), true);
 }
 
+// INC and DEC : Increment and decrement
+
+// INC, only N and Z change, C stays even when it wraps to zero
+template <bool W8>
+CPU::Word<W8> CPU::opINC(Word<W8> value) {
+	const Word<W8> result = static_cast<Word<W8>>(value + 1);
+
+	setNZ<W8>(result);
+
+	return result;
+}
+
+// DEC
+template <bool W8>
+CPU::Word<W8> CPU::opDEC(Word<W8> value) {
+	const Word<W8> result = static_cast<Word<W8>>(value - 1);
+
+	setNZ<W8>(result);
+
+	return result;
+}
+
+// Shifts and rotates, The bit that falls off goes to C
+
+// ASL, shift left, bit 0 gets 0
+template <bool W8>
+CPU::Word<W8> CPU::opASL(Word<W8> value) {
+	setFlag(FLAG_C, value & signBit<W8>());
+
+	const Word<W8> result = static_cast<Word<W8>>(value << 1);
+
+	setNZ<W8>(result);
+
+	return result;
+}
+
+// LSR, shift right, the top bit gets 0 so N always ends clear
+template <bool W8>
+CPU::Word<W8> CPU::opLSR(Word<W8> value) {
+	setFlag(FLAG_C, value & 0x01);
+
+	const Word<W8> result = static_cast<Word<W8>>(value >> 1);
+
+	setNZ<W8>(result);
+
+	return result;
+}
+
+// ROL, rotate left, the old C goes into bit 0, carryIn is saved before C gets the new value
+template <bool W8>
+CPU::Word<W8> CPU::opROL(Word<W8> value) {
+	const bool     carryIn = flag(FLAG_C);
+	const Word<W8> result = static_cast<Word<W8>>(value << 1 | carryIn);
+
+	setFlag(FLAG_C, value & signBit<W8>());
+	setNZ<W8>(result);
+
+	return result;
+}
+
+// ROR, rotate right, the old C goes into the top bit
+template <bool W8>
+CPU::Word<W8> CPU::opROR(Word<W8> value) {
+	const bool     carryIn = flag(FLAG_C);
+	const Word<W8> result = static_cast<Word<W8>>(value >> 1 | (carryIn ? signBit<W8>() : 0));
+
+	setFlag(FLAG_C, value & 0x01);
+	setNZ<W8>(result);
+
+	return result;
+}
+
+// TSB and TRB : Test and set or reset bits
+
+// TSB, sets in memory the bits that are set in A
+template <bool W8>
+CPU::Word<W8> CPU::opTSB(Word<W8> value) {
+	const Word<W8> mask = narrow<W8>(m_registers.A);
+
+	setFlag(FLAG_Z, (value & mask) == 0);
+
+	return static_cast<Word<W8>>(value | mask);
+}
+
+// TRB, clears in memory the bits that are set in A
+template <bool W8>
+CPU::Word<W8> CPU::opTRB(Word<W8> value) {
+	const Word<W8> mask = narrow<W8>(m_registers.A);
+
+	setFlag(FLAG_Z, (value & mask) == 0);
+
+	return static_cast<Word<W8>>(value & ~mask);
+}
+
 } // namespace SNES

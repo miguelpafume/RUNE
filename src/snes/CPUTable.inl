@@ -2,7 +2,7 @@
 
 namespace SNES {
 
-// Families 1 and 5 are a pattern (bus cycles) + an operation (the math)
+// Families 1, 5 and 6 are a pattern (bus cycles) + an operation (the math)
 // Instructions on A use the M width, the ones on X and Y use the X width
 template <bool M8, bool X8>
 constexpr CPU::Table CPU::buildTable() {
@@ -252,6 +252,68 @@ constexpr CPU::Table CPU::buildTable() {
 	t[0xF9] = &CPU::absoluteIndexedRead<M8, X8, Index::Y, &CPU::opSBC<M8>>; // SBC abs,Y
 	t[0xFD] = &CPU::absoluteIndexedRead<M8, X8, Index::X, &CPU::opSBC<M8>>; // SBC abs,X
 	t[0xFF] = &CPU::absoluteLongIndexedRead<M8, &CPU::opSBC<M8>>;           // SBC long,X
+
+	// Family 6, increments and decrements
+
+	// INC
+	t[0x1A] = &CPU::impliedModify<M8, Register::A, &CPU::opINC<M8>>; // INC A
+	t[0xE6] = &CPU::directModify<M8, &CPU::opINC<M8>>;               // INC dp
+	t[0xEE] = &CPU::absoluteModify<M8, &CPU::opINC<M8>>;             // INC abs
+	t[0xF6] = &CPU::directIndexedModify<M8, &CPU::opINC<M8>>;        // INC dp,X
+	t[0xFE] = &CPU::absoluteIndexedModify<M8, &CPU::opINC<M8>>;      // INC abs,X
+
+	// DEC
+	t[0x3A] = &CPU::impliedModify<M8, Register::A, &CPU::opDEC<M8>>; // DEC A
+	t[0xC6] = &CPU::directModify<M8, &CPU::opDEC<M8>>;               // DEC dp
+	t[0xCE] = &CPU::absoluteModify<M8, &CPU::opDEC<M8>>;             // DEC abs
+	t[0xD6] = &CPU::directIndexedModify<M8, &CPU::opDEC<M8>>;        // DEC dp,X
+	t[0xDE] = &CPU::absoluteIndexedModify<M8, &CPU::opDEC<M8>>;      // DEC abs,X
+
+	// INX, INY, DEX and DEY, with the X width
+	t[0xE8] = &CPU::impliedModify<X8, Register::X, &CPU::opINC<X8>>; // INX
+	t[0xC8] = &CPU::impliedModify<X8, Register::Y, &CPU::opINC<X8>>; // INY
+	t[0xCA] = &CPU::impliedModify<X8, Register::X, &CPU::opDEC<X8>>; // DEX
+	t[0x88] = &CPU::impliedModify<X8, Register::Y, &CPU::opDEC<X8>>; // DEY
+
+	// Family 6, shifts and rotates
+
+	// ASL
+	t[0x06] = &CPU::directModify<M8, &CPU::opASL<M8>>;               // ASL dp
+	t[0x0A] = &CPU::impliedModify<M8, Register::A, &CPU::opASL<M8>>; // ASL A
+	t[0x0E] = &CPU::absoluteModify<M8, &CPU::opASL<M8>>;             // ASL abs
+	t[0x16] = &CPU::directIndexedModify<M8, &CPU::opASL<M8>>;        // ASL dp,X
+	t[0x1E] = &CPU::absoluteIndexedModify<M8, &CPU::opASL<M8>>;      // ASL abs,X
+
+	// ROL
+	t[0x26] = &CPU::directModify<M8, &CPU::opROL<M8>>;               // ROL dp
+	t[0x2A] = &CPU::impliedModify<M8, Register::A, &CPU::opROL<M8>>; // ROL A
+	t[0x2E] = &CPU::absoluteModify<M8, &CPU::opROL<M8>>;             // ROL abs
+	t[0x36] = &CPU::directIndexedModify<M8, &CPU::opROL<M8>>;        // ROL dp,X
+	t[0x3E] = &CPU::absoluteIndexedModify<M8, &CPU::opROL<M8>>;      // ROL abs,X
+
+	// LSR
+	t[0x46] = &CPU::directModify<M8, &CPU::opLSR<M8>>;               // LSR dp
+	t[0x4A] = &CPU::impliedModify<M8, Register::A, &CPU::opLSR<M8>>; // LSR A
+	t[0x4E] = &CPU::absoluteModify<M8, &CPU::opLSR<M8>>;             // LSR abs
+	t[0x56] = &CPU::directIndexedModify<M8, &CPU::opLSR<M8>>;        // LSR dp,X
+	t[0x5E] = &CPU::absoluteIndexedModify<M8, &CPU::opLSR<M8>>;      // LSR abs,X
+
+	// ROR
+	t[0x66] = &CPU::directModify<M8, &CPU::opROR<M8>>;               // ROR dp
+	t[0x6A] = &CPU::impliedModify<M8, Register::A, &CPU::opROR<M8>>; // ROR A
+	t[0x6E] = &CPU::absoluteModify<M8, &CPU::opROR<M8>>;             // ROR abs
+	t[0x76] = &CPU::directIndexedModify<M8, &CPU::opROR<M8>>;        // ROR dp,X
+	t[0x7E] = &CPU::absoluteIndexedModify<M8, &CPU::opROR<M8>>;      // ROR abs,X
+
+	// Family 6, TSB and TRB
+
+	// TSB
+	t[0x04] = &CPU::directModify<M8, &CPU::opTSB<M8>>;   // TSB dp
+	t[0x0C] = &CPU::absoluteModify<M8, &CPU::opTSB<M8>>; // TSB abs
+
+	// TRB
+	t[0x14] = &CPU::directModify<M8, &CPU::opTRB<M8>>;   // TRB dp
+	t[0x1C] = &CPU::absoluteModify<M8, &CPU::opTRB<M8>>; // TRB abs
 
 	// If any opcode is left empty this throws, and a throw in constinit doesn't compile
 	for (const Handler handler : t) {

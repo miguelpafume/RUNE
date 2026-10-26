@@ -365,6 +365,36 @@ private:
 	template <bool W8>
 	void opSBC(Word<W8> value);
 
+	// INC and DEC: Increment and decrement
+
+	template <bool W8>
+	Word<W8> opINC(Word<W8> value);
+
+	template <bool W8>
+	Word<W8> opDEC(Word<W8> value);
+
+	// Shifts and rotates
+
+	template <bool W8>
+	Word<W8> opASL(Word<W8> value);
+
+	template <bool W8>
+	Word<W8> opLSR(Word<W8> value);
+
+	template <bool W8>
+	Word<W8> opROL(Word<W8> value);
+
+	template <bool W8>
+	Word<W8> opROR(Word<W8> value);
+
+	// TSB and TRB: Test and set or reset bits
+
+	template <bool W8>
+	Word<W8> opTSB(Word<W8> value);
+
+	template <bool W8>
+	Word<W8> opTRB(Word<W8> value);
+
 	// CPUInstructions.inl: whole instructions, no pattern + operation
 
 	// Family 2: transfers

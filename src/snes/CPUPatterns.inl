@@ -309,4 +309,56 @@ void CPU::stackRelativeIndirectIndexedWrite() {
 	writeAt<W8>(atBank(pointer + m_registers.Y), (this->*Op)());
 }
 
+// Modify -> Op returns the new value, written back to the same address
+// The read, the internal cycle and the write are in modifyAt
+
+// A, X or Y: no memory, only the implied cycle
+template <bool W8, CPU::Register R, auto Op>
+void CPU::impliedModify() {
+	idleImplied();
+
+	U16& target = reg(R);
+	assign<W8>(target, (this->*Op)(narrow<W8>(target)));
+}
+
+// Direct page
+
+// dp
+template <bool W8, auto Op>
+void CPU::directModify() {
+	const U8 offset = fetch();
+	idleDirect();
+
+	modifyAt<W8, Op>(atDirect(offset));
+}
+
+// dp,X
+template <bool W8, auto Op>
+void CPU::directIndexedModify() {
+	const U8 offset = fetch();
+	idleDirect();
+	idle(lastFetchAddress());
+
+	modifyAt<W8, Op>(atDirect(offset + m_registers.X));
+}
+
+// Absolute
+
+// abs
+template <bool W8, auto Op>
+void CPU::absoluteModify() {
+	const U16 base = fetchWord();
+
+	modifyAt<W8, Op>(atBank(base));
+}
+
+// abs,X: extra cycle always, like the writes
+template <bool W8, auto Op>
+void CPU::absoluteIndexedModify() {
+	const U16 base = fetchWord();
+	idle(bankAddress(uncorrectedAddress(base, m_registers.X)));
+
+	modifyAt<W8, Op>(atBank(base + m_registers.X));
+}
+
 } // namespace SNES
