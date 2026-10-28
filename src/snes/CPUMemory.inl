@@ -153,6 +153,16 @@ auto CPU::atStack(U32 offset) const {
 	return [this, offset](U32 k) { return stackAddress(offset + k); };
 }
 
+// JMP (abs) and JML [abs] read the pointer in bank $00
+auto CPU::atBankZero(U32 address) const {
+	return [address](U32 k) { return (address + k) & OFFSET_MASK; };
+}
+
+// JMP (abs,X) and JSR (abs,X) read the pointer in the program bank
+auto CPU::atProgramBank(U32 address) const {
+	return [this, address](U32 k) { return static_cast<U32>(m_registers.PB) << 16 | ((address + k) & OFFSET_MASK); };
+}
+
 // Multi-byte accesses
 
 // Low byte first, with 16 bit it also reads at(1)

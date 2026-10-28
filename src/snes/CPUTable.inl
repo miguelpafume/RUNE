@@ -315,6 +315,47 @@ constexpr CPU::Table CPU::buildTable() {
 	t[0x14] = &CPU::directModify<M8, &CPU::opTRB<M8>>;   // TRB dp
 	t[0x1C] = &CPU::absoluteModify<M8, &CPU::opTRB<M8>>; // TRB abs
 
+	// Family 7, branches
+
+	// Conditional, the flag and the value that takes the branch
+	t[0x10] = &CPU::branchIf<FLAG_N, false>; // BPL
+	t[0x30] = &CPU::branchIf<FLAG_N, true>;  // BMI
+	t[0x50] = &CPU::branchIf<FLAG_V, false>; // BVC
+	t[0x70] = &CPU::branchIf<FLAG_V, true>;  // BVS
+	t[0x90] = &CPU::branchIf<FLAG_C, false>; // BCC
+	t[0xB0] = &CPU::branchIf<FLAG_C, true>;  // BCS
+	t[0xD0] = &CPU::branchIf<FLAG_Z, false>; // BNE
+	t[0xF0] = &CPU::branchIf<FLAG_Z, true>;  // BEQ
+
+	// Always
+	t[0x80] = &CPU::instructionBRA; // BRA
+	t[0x82] = &CPU::instructionBRL; // BRL
+
+	// Family 7, jumps
+
+	// JMP
+	t[0x4C] = &CPU::instructionJMPAbsolute;        // JMP abs
+	t[0x6C] = &CPU::instructionJMPIndirect;        // JMP (abs)
+	t[0x7C] = &CPU::instructionJMPIndexedIndirect; // JMP (abs,X)
+
+	// JML
+	t[0x5C] = &CPU::instructionJMPLong;         // JML long
+	t[0xDC] = &CPU::instructionJMPIndirectLong; // JML [abs]
+
+	// Family 7, subroutines and returns
+
+	// JSR and RTS
+	t[0x20] = &CPU::instructionJSRAbsolute;        // JSR abs
+	t[0xFC] = &CPU::instructionJSRIndexedIndirect; // JSR (abs,X)
+	t[0x60] = &CPU::instructionRTS;                // RTS
+
+	// JSL and RTL
+	t[0x22] = &CPU::instructionJSL; // JSL long
+	t[0x6B] = &CPU::instructionRTL; // RTL
+
+	// RTI
+	t[0x40] = &CPU::instructionRTI; // RTI
+
 	// If any opcode is left empty this throws, and a throw in constinit doesn't compile
 	for (const Handler handler : t) {
 		if (handler == nullptr) {

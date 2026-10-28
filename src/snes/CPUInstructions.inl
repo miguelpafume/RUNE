@@ -212,4 +212,174 @@ void CPU::instructionPLB() {
 	endNativeStack();
 }
 
+// Family 7: branches
+// PC wraps inside the bank, PB doesn't change
+
+// not taken costs only the operand fetch
+template <U8 MASK, bool SET>
+void CPU::branchIf() {
+	const S8 displacement = static_cast<S8>(fetch());
+
+	if (flag(MASK) == SET) {
+		takeBranch(displacement);
+	}
+}
+
+// emulation keeps the 6502 penalty for landing on another page
+void CPU::takeBranch(S8 displacement) {
+	const U16 target = static_cast<U16>(m_registers.PC + displacement);
+
+	if (m_registers.E && (target & PAGE_MASK) != (m_registers.PC & PAGE_MASK)) {
+		idle(lastFetchAddress());
+	}
+
+	idle(lastFetchAddress());
+
+	m_registers.PC = target;
+}
+
+void CPU::instructionBRA() { takeBranch(static_cast<S8>(fetch())); }
+
+// no page penalty here
+void CPU::instructionBRL() {
+	const U16 displacement = fetchWord();
+
+	idle(lastFetchAddress());
+
+	m_registers.PC = static_cast<U16>(m_registers.PC + displacement);
+}
+
+// Family 7: jumps
+// JMP stays in the bank, JML also changes PB
+
+void CPU::instructionJMPAbsolute() { m_registers.PC = fetchWord(); }
+
+void CPU::instructionJMPLong() {
+	const U32 target = fetchLong();
+
+	m_registers.PC = static_cast<U16>(target);
+	m_registers.PB = static_cast<U8>(target >> 16);
+}
+
+// the pointer is always read from bank $00
+void CPU::instructionJMPIndirect() {
+	const U16 pointer = fetchWord();
+
+	m_registers.PC = readAt<false>(atBankZero(pointer));
+}
+
+// the pointer is read from the program bank
+void CPU::instructionJMPIndexedIndirect() {
+	const U16 pointer = fetchWord();
+
+	idle(lastFetchAddress());
+
+	m_registers.PC = readAt<false>(atProgramBank(pointer + m_registers.X));
+}
+
+// 3 byte pointer, also in bank $00
+void CPU::instructionJMPIndirectLong() {
+	const U16 pointer = fetchWord();
+	const U32 target = readLongPointer(atBankZero(pointer));
+
+	m_registers.PC = static_cast<U16>(target);
+	m_registers.PB = static_cast<U8>(target >> 16);
+}
+
+// Family 7: subroutines and returns
+// The return address pushed is the last byte of the call, RTS and RTL add 1
+
+void CPU::instructionJSRAbsolute() {
+	const U16 target = fetchWord();
+
+	idle(lastFetchAddress());
+
+	const U16 returnAddress = static_cast<U16>(m_registers.PC - 1);
+
+	push(static_cast<U8>(returnAddress >> 8));
+	push(static_cast<U8>(returnAddress));
+
+	m_registers.PC = target;
+}
+
+// the pushes happen between the two pointer fetches, PC is already on the last byte
+// it's a 65816 instruction but it uses push, S stays in page $01
+void CPU::instructionJSRIndexedIndirect() {
+	const U8 low = fetch();
+
+	push(static_cast<U8>(m_registers.PC >> 8));
+	push(static_cast<U8>(m_registers.PC));
+
+	const U8 high = fetch();
+
+	idle(lastFetchAddress());
+
+	const U16 pointer = static_cast<U16>(high << 8 | low);
+
+	m_registers.PC = readAt<false>(atProgramBank(pointer + m_registers.X));
+}
+
+// the last idle is on S
+void CPU::instructionRTS() {
+	idleImplied();
+	idleImplied();
+
+	const U8 low = pull();
+	const U8 high = pull();
+
+	idle(m_registers.S);
+
+	m_registers.PC = static_cast<U16>((high << 8 | low) + 1);
+}
+
+// PB goes on the stack before the bank byte is fetched
+void CPU::instructionJSL() {
+	const U16 target = fetchWord();
+
+	pushNative(m_registers.PB);
+	idle(stackAddress(1));
+
+	const U8  bank = fetch();
+	const U16 returnAddress = static_cast<U16>(m_registers.PC - 1);
+
+	pushNative(static_cast<U8>(returnAddress >> 8));
+	pushNative(static_cast<U8>(returnAddress));
+
+	m_registers.PC = target;
+	m_registers.PB = bank;
+
+	endNativeStack();
+}
+
+// + 1 only on PC, it doesn't carry into PB
+void CPU::instructionRTL() {
+	idleImplied();
+	idleImplied();
+
+	const U8 low = pullNative();
+	const U8 high = pullNative();
+
+	m_registers.PB = pullNative();
+	m_registers.PC = static_cast<U16>((high << 8 | low) + 1);
+
+	endNativeStack();
+}
+
+// no + 1 here, and no PB in emulation
+void CPU::instructionRTI() {
+	idleImplied();
+	idleImplied();
+
+	setP(pull());
+
+	const U8 low = pull();
+	const U8 high = pull();
+
+	m_registers.PC = static_cast<U16>(high << 8 | low);
+
+	if (!m_registers.E) {
+		m_registers.PB = pull();
+	}
+}
+
 } // namespace SNES

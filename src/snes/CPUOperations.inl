@@ -226,7 +226,7 @@ CPU::Word<W8> CPU::opDEC(Word<W8> value) {
 	return result;
 }
 
-// Shifts and rotates, The bit that falls off goes to C
+// Shifts and rotates, the bit that falls off goes to C
 
 // ASL, shift left, bit 0 gets 0
 template <bool W8>

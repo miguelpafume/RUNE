@@ -110,16 +110,24 @@ private:
 	// CPU.cpp: status and registers
 
 	bool flag(U8 mask) const { return m_registers.P & mask; }
+
+	// don't use it for M and X, those go through setP
 	void setFlag(U8 mask, bool set);
+
+	// forces M and X in emulation, and X = 1 drops the high bytes of X and Y
 	void setP(U8 value);
+
+	// entering emulation also forces 8 bit and moves S to page $01
 	void setE(bool emulation);
 
 	template <bool W8>
 	void setNZ(Word<W8> value);
 
+	// only the low byte when W8
 	template <bool W8>
 	static Word<W8> narrow(U16 value);
 
+	// when W8 the high byte stays, so B survives an 8 bit LDA
 	template <bool W8>
 	static void assign(U16& target, Word<W8> value);
 
@@ -130,7 +138,7 @@ private:
 
 	// CPUTable.inl
 
-	// One table for each M/X combination, index is (M << 1) | X
+	// One table for each M/X combination
 	static const std::array<Table, 4> TABLES;
 
 	template <bool M8, bool X8>
@@ -139,158 +147,234 @@ private:
 	// CPUMemory.inl: bus helpers
 
 	// Program fetch
+
+	// PB:PC
 	U32 programAddress() const;
+
+	// PB:PC - 1, most internal cycles put this on the bus
 	U32 lastFetchAddress() const;
+
 	U8  fetch();
 	U16 fetchWord();
 	U32 fetchLong();
 
 	// Single cycles
+
 	U8   read(U32 address, bool lock = false);
 	void write(U32 address, U8 value, bool lock = false);
+
+	// no access, but the address still goes on the bus
 	void idle(U32 address, bool lock = false);
+
+	// on the next opcode address
 	void idleImplied();
+
+	// only when DL isn't zero
 	void idleDirect();
 
 	// Effective addresses
-	U32         directAddress(U32 offset) const;
-	U32         bankAddress(U32 address) const;
-	U32         stackAddress(U32 offset) const;
-	static U32  uncorrectedAddress(U32 base, U16 offset);
+
+	// bank $00, wraps inside the page in emulation when DL = 0
+	U32 directAddress(U32 offset) const;
+
+	// DB:address, can carry into the next bank
+	U32 bankAddress(U32 address) const;
+
+	// S + offset, bank $00
+	U32 stackAddress(U32 offset) const;
+
+	// what the bus shows before the index carry gets fixed
+	static U32 uncorrectedAddress(U32 base, U16 offset);
+
 	static bool crossesPage(U32 base, U16 offset);
 
 	// Stack, the native ones skip the page $01 wrap until endNativeStack
+
 	void push(U8 value);
 	U8   pull();
 	void pushNative(U8 value);
 	U8   pullNative();
+
+	// back to page $01 if in emulation
 	void endNativeStack();
 
 	// Operand locators, they return a lambda that gives the address of byte k
+
+	// D + offset, with the emulation page wrap
 	auto atDirect(U32 offset) const;
+
+	// no emulation page wrap, for [dp] and PEI
 	auto atDirectNative(U32 offset) const;
+
+	// the wrap is only on offset + X, the pointer bytes go past it
 	auto atDirectIndexedIndirect(U32 offset) const;
+
+	// DB:address
 	auto atBank(U32 address) const;
+
+	// full 24 bit address, DB isn't used
 	auto atLong(U32 address) const;
+
+	// S + offset
 	auto atStack(U32 offset) const;
-	auto atBankZero(U32 address) const;    // JMP (a), JML [a]
-	auto atProgramBank(U32 address) const; // JMP (a,X), JSR (a,X)
+
+	// pointers of JMP (abs) and JML [abs]
+	auto atBankZero(U32 address) const;
+
+	// pointers of JMP (abs,X) and JSR (abs,X)
+	auto atProgramBank(U32 address) const;
 
 	// Multi-byte accesses (one bus cycle per byte)
+
 	template <bool W8, typename Locator>
 	Word<W8> readAt(Locator at, bool lock = false);
 
+	// low, high, bank
 	template <typename Locator>
 	U32 readLongPointer(Locator at);
 
 	template <bool W8, typename Locator>
 	void writeAt(Locator at, Word<W8> value);
 
+	// read, idle and write back, all with MLB low (family 6)
 	template <bool W8, auto Op, typename Locator>
-	void modifyAt(Locator at); // family 6
+	void modifyAt(Locator at);
 
 	// CPUPatterns.inl: addressing patterns
 	// each pattern does the bus cycles of one addressing mode
 
 	// Read -> Op consumes the operand
 
+	// #
 	template <bool W8, auto Op>
 	void immediateRead();
 
+	// dp
 	template <bool W8, auto Op>
 	void directRead();
 
+	// dp,X / dp,Y
 	template <bool W8, Index I, auto Op>
 	void directIndexedRead();
 
+	// abs
 	template <bool W8, auto Op>
 	void absoluteRead();
 
+	// abs,X / abs,Y, extra cycle with 16 bit index or a page cross
 	template <bool W8, bool X8, Index I, auto Op>
 	void absoluteIndexedRead();
 
+	// long
 	template <bool W8, auto Op>
 	void absoluteLongRead();
 
+	// long,X
 	template <bool W8, auto Op>
 	void absoluteLongIndexedRead();
 
+	// (dp)
 	template <bool W8, auto Op>
 	void directIndirectRead();
 
+	// (dp,X)
 	template <bool W8, auto Op>
 	void directIndexedIndirectRead();
 
+	// (dp),Y, same extra cycle rule as abs,Y
 	template <bool W8, bool X8, auto Op>
 	void directIndirectIndexedRead();
 
+	// [dp]
 	template <bool W8, auto Op>
 	void directIndirectLongRead();
 
+	// [dp],Y
 	template <bool W8, auto Op>
 	void directIndirectLongIndexedRead();
 
+	// sr,S
 	template <bool W8, auto Op>
 	void stackRelativeRead();
 
+	// (sr,S),Y
 	template <bool W8, auto Op>
 	void stackRelativeIndirectIndexedRead();
 
 	// Write -> Op gives the value
+	// same addresses as the reads, but the indexed ones always take the extra cycle
 
+	// dp
 	template <bool W8, auto Op>
 	void directWrite();
 
+	// dp,X / dp,Y
 	template <bool W8, Index I, auto Op>
 	void directIndexedWrite();
 
+	// abs
 	template <bool W8, auto Op>
 	void absoluteWrite();
 
+	// abs,X / abs,Y
 	template <bool W8, Index I, auto Op>
 	void absoluteIndexedWrite();
 
+	// long
 	template <bool W8, auto Op>
 	void absoluteLongWrite();
 
+	// long,X
 	template <bool W8, auto Op>
 	void absoluteLongIndexedWrite();
 
+	// (dp)
 	template <bool W8, auto Op>
 	void directIndirectWrite();
 
+	// (dp,X)
 	template <bool W8, auto Op>
 	void directIndexedIndirectWrite();
 
+	// (dp),Y
 	template <bool W8, auto Op>
 	void directIndirectIndexedWrite();
 
+	// [dp]
 	template <bool W8, auto Op>
 	void directIndirectLongWrite();
 
+	// [dp],Y
 	template <bool W8, auto Op>
 	void directIndirectLongIndexedWrite();
 
+	// sr,S
 	template <bool W8, auto Op>
 	void stackRelativeWrite();
 
+	// (sr,S),Y
 	template <bool W8, auto Op>
 	void stackRelativeIndirectIndexedWrite();
 
 	// Modify -> Op changes the operand (family 6)
 
+	// A, X or Y (ASL A, INC A, INX, DEY...)
 	template <bool W8, Register R, auto Op>
 	void impliedModify();
 
+	// dp
 	template <bool W8, auto Op>
 	void directModify();
 
+	// dp,X
 	template <bool W8, auto Op>
 	void directIndexedModify();
 
+	// abs
 	template <bool W8, auto Op>
 	void absoluteModify();
 
+	// abs,X, the index cycle always happens
 	template <bool W8, auto Op>
 	void absoluteIndexedModify();
 
@@ -334,14 +418,17 @@ private:
 
 	// BIT: Bit test
 
+	// N and V come from the operand, only Z uses the AND
 	template <bool W8>
 	void opBIT(Word<W8> value);
 
+	// BIT #, only Z changes
 	template <bool W8>
 	void opBITImmediate(Word<W8> value);
 
 	// CP: Compare
 
+	// C set means no borrow (left >= right)
 	template <bool W8>
 	void compare(Word<W8> left, Word<W8> right);
 
@@ -356,20 +443,24 @@ private:
 
 	// ADC and SBC: Add and subtract with carry
 
+	// shared by ADC and SBC, decimal mode included
 	template <bool W8>
 	void addWithCarry(Word<W8> operand, bool subtract);
 
 	template <bool W8>
 	void opADC(Word<W8> value);
 
+	// ADC with the operand complemented
 	template <bool W8>
 	void opSBC(Word<W8> value);
 
 	// INC and DEC: Increment and decrement
 
+	// also INX and INY, C doesn't change
 	template <bool W8>
 	Word<W8> opINC(Word<W8> value);
 
+	// also DEX and DEY
 	template <bool W8>
 	Word<W8> opDEC(Word<W8> value);
 
@@ -389,9 +480,11 @@ private:
 
 	// TSB and TRB: Test and set or reset bits
 
+	// Z from A AND the old value, N and V don't change
 	template <bool W8>
 	Word<W8> opTSB(Word<W8> value);
 
+	// same Z as TSB
 	template <bool W8>
 	Word<W8> opTRB(Word<W8> value);
 
@@ -399,9 +492,11 @@ private:
 
 	// Family 2: transfers
 
+	// TAX, TAY, TXA, TYA, TXY, TYX, TSX, TSC, TCD, TDC, with the width of TO
 	template <bool W8, Register FROM, Register TO>
 	void transfer();
 
+	// TCS and TXS, no flags
 	template <Register FROM>
 	void transferToS();
 
@@ -409,6 +504,7 @@ private:
 
 	// Family 3: flags and mode
 
+	// CLC, SEC, CLI, SEI, CLD, SED, CLV
 	template <U8 MASK, bool SET>
 	void changeFlag();
 
@@ -418,6 +514,7 @@ private:
 
 	// Family 4: stack, 6502 instructions (push/pull)
 
+	// PHA, PHX, PHY
 	template <bool W8, Register R>
 	void pushRegister();
 
@@ -425,6 +522,7 @@ private:
 	void instructionPHB();
 	void instructionPHK();
 
+	// PLA, PLX, PLY
 	template <bool W8, Register R>
 	void pullRegister();
 
@@ -438,6 +536,46 @@ private:
 	void instructionPER();
 	void instructionPLD();
 	void instructionPLB();
+
+	// Family 7: branches
+
+	// BPL, BMI, BVC, BVS, BCC, BCS, BNE, BEQ
+	template <U8 MASK, bool SET>
+	void branchIf();
+
+	void instructionBRA();
+	void instructionBRL();
+	void takeBranch(S8 displacement);
+
+	// Family 7: jumps
+
+	// JMP abs
+	void instructionJMPAbsolute();
+
+	// JML long
+	void instructionJMPLong();
+
+	// JMP (abs)
+	void instructionJMPIndirect();
+
+	// JMP (abs,X)
+	void instructionJMPIndexedIndirect();
+
+	// JML [abs]
+	void instructionJMPIndirectLong();
+
+	// Family 7: subroutines and returns
+
+	// JSR abs
+	void instructionJSRAbsolute();
+
+	// JSR (abs,X)
+	void instructionJSRIndexedIndirect();
+
+	void instructionRTS();
+	void instructionJSL();
+	void instructionRTL();
+	void instructionRTI();
 };
 
 } // namespace SNES
