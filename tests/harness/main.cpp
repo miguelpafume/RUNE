@@ -87,6 +87,21 @@ CaseResult runCase(Bus& bus, CPU& cpu, const TestCase& testCase) {
 	cpu.setRegisters(testCase.initial.registers);
 	cpu.step();
 
+	// MVN and MVP go back to their own opcode, the suite keeps running them until its
+	// cycle count and cuts the last one in the middle
+	const auto repeated = [&] {
+		const CPU::Registers& now = cpu.getRegisters();
+		return now.PC == testCase.initial.registers.PC && now.PB == testCase.initial.registers.PB;
+	};
+
+	bus.setCycleBudget(testCase.cycles.size());
+
+	try {
+		while (bus.accessLog().size() < testCase.cycles.size() && repeated())
+			cpu.step();
+	} catch (const Bus::CycleBudgetExhausted&) {
+	}
+
 	return compareCase(testCase, cpu.getRegisters(), bus);
 }
 

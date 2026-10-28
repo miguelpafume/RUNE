@@ -382,4 +382,84 @@ void CPU::instructionRTI() {
 	}
 }
 
+// Family 8: interrupts and the rest
+
+// the byte after the opcode is a signature, fetching it makes the return address skip it
+// TODO: IRQ and NMI reuse this without the signature fetch, and with bit 4 of P clear
+template <U16 NATIVE_VECTOR, U16 EMULATION_VECTOR>
+void CPU::softwareInterrupt() {
+	fetch();
+
+	if (!m_registers.E) {
+		push(m_registers.PB);
+	}
+
+	push(static_cast<U8>(m_registers.PC >> 8));
+	push(static_cast<U8>(m_registers.PC));
+
+	// in emulation X is always 1, so bit 4 goes out set and the handler can tell BRK from IRQ
+	push(m_registers.P);
+
+	setFlag(FLAG_I, true);
+	setFlag(FLAG_D, false);
+
+	const U16 vector = m_registers.E ? EMULATION_VECTOR : NATIVE_VECTOR;
+	const U8  low = m_bus.fetchVector(vector);
+	const U8  high = m_bus.fetchVector(vector + 1);
+
+	m_registers.PC = static_cast<U16>(high << 8 | low);
+	m_registers.PB = 0;
+}
+
+// one byte per run, PC goes back to the opcode until A wraps to $FFFF
+template <bool X8, int STEP>
+void CPU::blockMove() {
+	// the destination bank comes first in the code, the assembler writes it last
+	const U8 destinationBank = fetch();
+	const U8 sourceBank = fetch();
+	m_registers.DB = destinationBank;
+
+	const U32 source = static_cast<U32>(sourceBank) << 16 | m_registers.X;
+	const U32 destination = static_cast<U32>(destinationBank) << 16 | m_registers.Y;
+
+	write(destination, read(source));
+	idle(destination);
+	idle(destination);
+
+	assign<X8>(m_registers.X, static_cast<Word<X8>>(narrow<X8>(m_registers.X) + STEP));
+	assign<X8>(m_registers.Y, static_cast<Word<X8>>(narrow<X8>(m_registers.Y) + STEP));
+
+	if (m_registers.A-- != 0) {
+		m_registers.PC -= 3;
+	}
+}
+
+// the suite ends the case on the first halted cycle, step() does the ones after it
+// TODO: any interrupt ends WAI, even with I set
+void CPU::instructionWAI() {
+	idleImplied();
+	idleImplied();
+
+	m_waiting = true;
+	m_bus.haltedCycle();
+}
+
+// TODO: only a reset ends STP
+void CPU::instructionSTP() {
+	idleImplied();
+	idleImplied();
+
+	m_stopped = true;
+	m_bus.haltedCycle();
+}
+
+void CPU::instructionNOP() { idleImplied(); }
+
+// reserved, the second byte is skipped with an internal cycle instead of a fetch
+void CPU::instructionWDM() {
+	idleImplied();
+
+	m_registers.PC++;
+}
+
 } // namespace SNES

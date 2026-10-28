@@ -144,6 +144,4 @@ U16 CPU::index() const {
 	return I == Index::X ? m_registers.X : m_registers.Y;
 }
 
-void CPU::opcodeMissing() {}
-
 } // namespace SNES

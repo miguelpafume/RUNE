@@ -39,8 +39,6 @@ public:
 	void step();
 
 private:
-	void opcodeMissing(); // REMOVE WHEN ALL OPCODES ARE WRITTEN
-
 	// Constants
 
 	// Status registers (P) bits
@@ -576,6 +574,21 @@ private:
 	void instructionJSL();
 	void instructionRTL();
 	void instructionRTI();
+
+	// Family 8: interrupts and the rest
+
+	// BRK and COP
+	template <U16 NATIVE_VECTOR, U16 EMULATION_VECTOR>
+	void softwareInterrupt();
+
+	// MVN (STEP +1) and MVP (STEP -1)
+	template <bool X8, int STEP>
+	void blockMove();
+
+	void instructionWAI();
+	void instructionSTP();
+	void instructionNOP();
+	void instructionWDM();
 };
 
 } // namespace SNES

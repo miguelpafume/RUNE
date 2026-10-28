@@ -2,6 +2,8 @@
 
 #include "rune/Types.hpp"
 
+#include <cstddef>
+#include <limits>
 #include <optional>
 #include <vector>
 
@@ -57,6 +59,12 @@ public:
 	void                       beginCase();
 	const std::vector<Access>& accessLog() const { return m_accessLog; }
 
+	// thrown on a cycle past the budget, so the CPU can stop in the middle of an instruction
+	// the suite cuts MVN and MVP at 100 cycles, in the middle of a repetition
+	struct CycleBudgetExhausted {};
+
+	void setCycleBudget(std::size_t cycles) { m_cycleBudget = cycles; }
+
 private:
 	Mode m_mode;
 
@@ -67,6 +75,10 @@ private:
 	bool m_flagE {};
 	bool m_flagM {};
 	bool m_flagX {};
+
+	std::size_t m_cycleBudget = std::numeric_limits<std::size_t>::max();
+
+	void spendCycle();
 
 	U8 readCycle(U32 address, CycleKind kind, bool memoryLock = false);
 };

@@ -2,13 +2,11 @@
 
 namespace SNES {
 
-// Families 1, 5 and 6 are a pattern (bus cycles) + an operation (the math)
+// Families 1, 5 and 6 are a pattern + an operation, the rest are whole instructions
 // Instructions on A use the M width, the ones on X and Y use the X width
 template <bool M8, bool X8>
 constexpr CPU::Table CPU::buildTable() {
 	Table t {};
-
-	t.fill(&CPU::opcodeMissing); // REMOVE WHEN ALL OPCODES ARE WRITTEN
 
 	// Family 1, loads
 
@@ -355,6 +353,26 @@ constexpr CPU::Table CPU::buildTable() {
 
 	// RTI
 	t[0x40] = &CPU::instructionRTI; // RTI
+
+	// Family 8, interrupts
+
+	t[0x00] = &CPU::softwareInterrupt<VECTOR_NATIVE_BRK, VECTOR_EMULATION_IRQ_BRK>; // BRK
+	t[0x02] = &CPU::softwareInterrupt<VECTOR_NATIVE_COP, VECTOR_EMULATION_COP>;     // COP
+
+	// Family 8, block move
+
+	t[0x54] = &CPU::blockMove<X8, +1>; // MVN
+	t[0x44] = &CPU::blockMove<X8, -1>; // MVP
+
+	// Family 8, halt
+
+	t[0xCB] = &CPU::instructionWAI; // WAI
+	t[0xDB] = &CPU::instructionSTP; // STP
+
+	// Family 8, no operation
+
+	t[0xEA] = &CPU::instructionNOP; // NOP
+	t[0x42] = &CPU::instructionWDM; // WDM
 
 	// If any opcode is left empty this throws, and a throw in constinit doesn't compile
 	for (const Handler handler : t) {
