@@ -1,5 +1,7 @@
 #include "Bus.hpp"
 
+#include "Cartridge.hpp"
+
 #include <cstddef>
 #include <limits>
 
@@ -11,6 +13,8 @@ constexpr std::size_t TEST_MEMORY_SIZE = 0x00FFFFFF + 1; // 16 MB, flat
 
 constexpr std::size_t EXPECTED_DIRTY_PER_CASE = 16;
 constexpr std::size_t EXPECTED_CYCLES_PER_CASE = 16;
+
+constexpr U32 BLOCK_OFFSET_MASK = Bus::BLOCK_SIZE - 1;
 
 Bus::Bus(Mode mode) : m_mode {mode} {
 	if (m_mode == Mode::Test) {
@@ -38,7 +42,10 @@ U8 Bus::readCycle(U32 address, CycleKind kind, bool memoryLock) {
 		return value;
 	}
 
-	return 0;
+	// TODO: charge the region's cost in master cycles
+	m_openBus = readSystem(address & ADDRESS_MASK);
+
+	return m_openBus;
 }
 
 // Loads one entry of the case's "initial.ram"
@@ -49,8 +56,27 @@ void Bus::poke(U32 address, U8 value) {
 	m_dirty.push_back(target);
 }
 
-// Reads one entry of the case's "final.ram" for the comparator
-U8 Bus::peek(U32 address) const { return m_testMemory[address & ADDRESS_MASK]; }
+// Test mode reads the flat memory for the comparator
+// System mode skips the registers, reading some of them changes their state
+U8 Bus::peek(U32 address) const {
+	const U32 target = address & ADDRESS_MASK;
+
+	if (m_mode == Mode::Test) {
+		return m_testMemory[target];
+	}
+
+	const U32 block = target >> BLOCK_SHIFT;
+
+	if (const U8* data = m_readMap[block]) {
+		return data[target & BLOCK_OFFSET_MASK];
+	}
+
+	if (m_blockType[block] == BlockType::Sram) {
+		return m_cartridge->readSram(target);
+	}
+
+	return m_openBus;
+}
 
 void Bus::beginCase() {
 	for (const U32 address : m_dirty) {
@@ -72,7 +98,13 @@ void Bus::writeData(U32 address, U8 value, bool memoryLock) {
 
 		m_dirty.push_back(target);
 		m_accessLog.push_back({target, value, CycleKind::DataAccess, true, m_flagE, m_flagM, m_flagX, memoryLock});
+
+		return;
 	}
+
+	// TODO: charge the region's cost in master cycles
+	m_openBus = value;
+	writeSystem(address & ADDRESS_MASK, value);
 }
 
 void Bus::internalCycle(U32 address, bool memoryLock) {
@@ -107,6 +139,60 @@ void Bus::setFlags(bool emulation, bool flagM, bool flagX) {
 	m_flagE = emulation;
 	m_flagM = flagM;
 	m_flagX = flagX;
+}
+
+U8 Bus::readSystem(U32 address) {
+	const U32 block = address >> BLOCK_SHIFT;
+
+	if (const U8* data = m_readMap[block]) {
+		return data[address & BLOCK_OFFSET_MASK];
+	}
+
+	switch (m_blockType[block]) {
+	case BlockType::Sram :
+		return m_cartridge->readSram(address);
+
+	case BlockType::Io : // TODO: decode $2100-$21FF and $4000-$43FF
+	case BlockType::OpenBus :
+		break;
+	}
+
+	return m_openBus;
+}
+
+void Bus::writeSystem(U32 address, U8 value) {
+	const U32 block = address >> BLOCK_SHIFT;
+
+	if (U8* data = m_writeMap[block]) {
+		data[address & BLOCK_OFFSET_MASK] = value;
+		return;
+	}
+
+	switch (m_blockType[block]) {
+	case BlockType::Sram :
+		m_cartridge->writeSram(address, value);
+		break;
+
+	case BlockType::Io : // TODO: decode $2100-$21FF and $4000-$43FF
+	case BlockType::OpenBus :
+		break;
+	}
+}
+
+void Bus::mapBlock(U32 address, const U8* read, U8* write, BlockType type) {
+	const U32 block = (address & ADDRESS_MASK) >> BLOCK_SHIFT;
+
+	m_readMap[block] = read;
+	m_writeMap[block] = write;
+	m_blockType[block] = type;
+}
+
+void Bus::mapRange(U8 bankFirst, U8 bankLast, U16 addressFirst, U16 addressLast, BlockType type) {
+	for (U32 bank = bankFirst; bank <= bankLast; bank++) {
+		for (U32 address = addressFirst; address <= addressLast; address += BLOCK_SIZE) {
+			mapBlock(bank << 16 | address, nullptr, nullptr, type);
+		}
+	}
 }
 
 } // namespace SNES
