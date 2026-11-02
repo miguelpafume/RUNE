@@ -44,13 +44,16 @@ public:
 
 	enum class BlockType : U8 {
 		OpenBus,
-		Io,
+		ExternalRegisters, // $2000-$3FFF: PPU, APU and WRAM port, outside the CPU
+		CpuRegisters,      // $4000-$5FFF: joypad, interrupts and DMA, inside the CPU
 		Sram
 	};
 
 	static constexpr U32 BLOCK_SHIFT = 12;
 	static constexpr U32 BLOCK_SIZE = 1u << BLOCK_SHIFT; // 4 KiB
 	static constexpr U32 BLOCK_COUNT = 0x1000;           // 4096 x 4 KiB = 16 MiB
+
+	static constexpr U32 WRAM_SIZE = 0x20000; // 128 KiB
 
 	explicit Bus(Mode mode);
 
@@ -100,6 +103,11 @@ private:
 	std::array<U8*, BLOCK_COUNT>       m_writeMap {};
 	std::array<BlockType, BLOCK_COUNT> m_blockType {};
 
+	std::vector<U8> m_wram {};
+
+	// Address of the WRAM port, moves forward on every $2180 access
+	U32 m_wramAddress {};
+
 	// Last value seen on the data bus, unmapped reads return it
 	U8 m_openBus {};
 
@@ -117,6 +125,14 @@ private:
 
 	U8   readSystem(U32 address);
 	void writeSystem(U32 address, U8 value);
+
+	void mapConsole();
+	void mapSystemArea(U8 bankFirst, U8 bankLast);
+
+	U8   readExternalRegister(U32 address);
+	void writeExternalRegister(U32 address, U8 value);
+	U8   readCpuRegister(U32 address);
+	void writeCpuRegister(U32 address, U8 value);
 };
 
 } // namespace SNES
