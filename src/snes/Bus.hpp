@@ -12,6 +12,7 @@ namespace SNES {
 
 using RUNE::U16;
 using RUNE::U32;
+using RUNE::U64;
 using RUNE::U8;
 
 class Cartridge;
@@ -75,6 +76,9 @@ public:
 	// Read that doesn't change anything, used by the comparator and the viewers
 	U8 peek(U32 address) const;
 
+	// System mode only
+	U64 masterCycles() const { return m_masterCycles; }
+
 	// Test mode only
 	void                       poke(U32 address, U8 value);
 	void                       beginCase();
@@ -111,6 +115,10 @@ private:
 	// Last value seen on the data bus, unmapped reads return it
 	U8 m_openBus {};
 
+	// The system's only clock, it moves when the bus is used
+	U64  m_masterCycles {};
+	bool m_fastRom {}; // $420D bit 0
+
 	bool m_flagE {};
 	bool m_flagM {};
 	bool m_flagX {};
@@ -120,8 +128,8 @@ private:
 	std::size_t m_cycleBudget = std::numeric_limits<std::size_t>::max();
 
 	void spendCycle();
-
-	U8 readCycle(U32 address, CycleKind kind, bool memoryLock = false);
+	U32  accessCycles(U32 address) const;
+	U8   readCycle(U32 address, CycleKind kind, bool memoryLock = false);
 
 	U8   readSystem(U32 address);
 	void writeSystem(U32 address, U8 value);

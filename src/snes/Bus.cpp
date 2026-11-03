@@ -1,6 +1,7 @@
 #include "Bus.hpp"
 
 #include "Cartridge.hpp"
+#include "Constants.hpp"
 
 #include <cstddef>
 #include <limits>
@@ -41,6 +42,11 @@ constexpr U16 INTERNAL_FIRST = 0x4200; // NMI/IRQ, multiply and divide, auto joy
 constexpr U16 INTERNAL_LAST = 0x421F;
 constexpr U16 DMA_FIRST = 0x4300; // 8 channels x 16 bytes
 constexpr U16 DMA_LAST = 0x437F;
+constexpr U16 MEMSEL = 0x420D;
+
+constexpr U8 MEMSEL_FASTROM = 0x01;
+
+constexpr U32 CYCLES_INTERNAL = CYCLES_FAST; // cycles that don't touch memory take 6 too
 
 Bus::Bus(Mode mode) : m_mode {mode} {
 	if (m_mode == Mode::Test) {
@@ -61,21 +67,50 @@ void Bus::spendCycle() {
 }
 
 U8 Bus::readCycle(U32 address, CycleKind kind, bool memoryLock) {
+	const U32 target = address & ADDRESS_MASK;
+
 	if (m_mode == Mode::Test) {
 		spendCycle();
 
-		const U32 target = address & ADDRESS_MASK;
-		const U8  value = m_testMemory[target];
+		const U8 value = m_testMemory[target];
 
 		m_accessLog.push_back({target, value, kind, false, m_flagE, m_flagM, m_flagX, memoryLock});
 
 		return value;
 	}
 
-	// TODO: charge the region's cost in master cycles
-	m_openBus = readSystem(address & ADDRESS_MASK);
+	// bsnes and MesenCE charge part of this after the access. We charge it all first,
+	// the exact moment doesn't matter because the PPU renders whole lines
+	m_masterCycles += accessCycles(target);
 
-	return m_openBus;
+	const U8 value = readSystem(target);
+
+	// $4xxx registers are inside the CPU, reading them doesn't reach the data bus
+	if (m_blockType[target >> BLOCK_SHIFT] != BlockType::CpuRegisters) {
+		m_openBus = value;
+	}
+
+	return value;
+}
+
+// Master cycles of one access, they depend only on the address and on FastROM
+U32 Bus::accessCycles(U32 address) const {
+	// Banks $40-$7F and $C0-$FF, and $8000-$FFFF of any bank. Only banks $80-$FF can be fast
+	if (address & 0x408000) {
+		return (address & 0x800000) && m_fastRom ? CYCLES_FAST : CYCLES_SLOW;
+	}
+
+	const U16 offset = address & 0xFFFF;
+
+	if (offset < 0x2000 || offset >= 0x6000) {
+		return CYCLES_SLOW;
+	}
+
+	if (offset >= 0x4000 && offset < 0x4200) {
+		return CYCLES_XSLOW;
+	}
+
+	return CYCLES_FAST;
 }
 
 // Loads one entry of the case's "initial.ram"
@@ -119,10 +154,10 @@ void Bus::beginCase() {
 }
 
 void Bus::writeData(U32 address, U8 value, bool memoryLock) {
+	const U32 target = address & ADDRESS_MASK;
+
 	if (m_mode == Mode::Test) {
 		spendCycle();
-
-		const U32 target = address & ADDRESS_MASK;
 
 		m_testMemory[target] = value;
 
@@ -132,9 +167,10 @@ void Bus::writeData(U32 address, U8 value, bool memoryLock) {
 		return;
 	}
 
-	// TODO: charge the region's cost in master cycles
+	m_masterCycles += accessCycles(target);
+
 	m_openBus = value;
-	writeSystem(address & ADDRESS_MASK, value);
+	writeSystem(target, value);
 }
 
 void Bus::internalCycle(U32 address, bool memoryLock) {
@@ -144,7 +180,10 @@ void Bus::internalCycle(U32 address, bool memoryLock) {
 		const U32 target = address & ADDRESS_MASK;
 
 		m_accessLog.push_back({target, std::nullopt, CycleKind::Internal, false, m_flagE, m_flagM, m_flagX, memoryLock});
+		return;
 	}
+
+	m_masterCycles += CYCLES_INTERNAL;
 }
 
 void Bus::invalidWrite(U32 address, U8 value, bool memoryLock) {
@@ -154,7 +193,10 @@ void Bus::invalidWrite(U32 address, U8 value, bool memoryLock) {
 		const U32 target = address & ADDRESS_MASK;
 
 		m_accessLog.push_back({target, value, CycleKind::Internal, true, m_flagE, m_flagM, m_flagX, memoryLock});
+		return;
 	}
+
+	m_masterCycles += CYCLES_INTERNAL;
 }
 
 void Bus::haltedCycle() {
@@ -162,7 +204,10 @@ void Bus::haltedCycle() {
 		spendCycle();
 
 		m_accessLog.push_back({0, std::nullopt, CycleKind::Internal});
+		return;
 	}
+
+	m_masterCycles += CYCLES_INTERNAL;
 }
 
 void Bus::setFlags(bool emulation, bool flagM, bool flagX) {
@@ -343,8 +388,7 @@ U8 Bus::readCpuRegister(U32 address) {
 	return m_openBus;
 }
 
-// value stays unused until a CPU register is implemented
-void Bus::writeCpuRegister(U32 address, [[maybe_unused]] U8 value) {
+void Bus::writeCpuRegister(U32 address, U8 value) {
 	const U16 offset = address & 0xFFFF;
 
 	if (offset >= JOYPAD_FIRST && offset <= JOYPAD_LAST) {
@@ -353,7 +397,15 @@ void Bus::writeCpuRegister(U32 address, [[maybe_unused]] U8 value) {
 	}
 
 	if (offset >= INTERNAL_FIRST && offset <= INTERNAL_LAST) {
-		// TODO: $4200-$420D NMI/IRQ enable, multiply and divide, DMA start, FastROM
+		switch (offset) {
+		case MEMSEL : // ROM in banks $80-$FF runs at 6 cycles when set
+			m_fastRom = (value & MEMSEL_FASTROM) != 0;
+			break;
+
+		default : // TODO: $4200-$420C NMI/IRQ enable, multiply and divide, DMA start
+			break;
+		}
+
 		return;
 	}
 
