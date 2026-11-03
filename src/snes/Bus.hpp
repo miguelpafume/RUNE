@@ -17,6 +17,7 @@ using RUNE::U8;
 
 class APU;
 class Cartridge;
+class PPU;
 
 class Bus {
 public:
@@ -74,6 +75,7 @@ public:
 
 	void attachCartridge(Cartridge& cartridge) { m_cartridge = &cartridge; }
 	void attachApu(APU& apu) { m_apu = &apu; }
+	void attachPpu(PPU& ppu) { m_ppu = &ppu; }
 
 	// Read that doesn't change anything, used by the comparator and the viewers
 	U8 peek(U32 address) const;
@@ -120,6 +122,7 @@ private:
 	// The system's only clock, it moves when the bus is used
 	U64  m_masterCycles {};
 	bool m_fastRom {}; // $420D bit 0
+	bool m_nmiFlag {}; // $4210 bit 7
 
 	bool m_flagE {};
 	bool m_flagM {};
@@ -127,10 +130,12 @@ private:
 
 	Cartridge* m_cartridge {};
 	APU*       m_apu {};
+	PPU*       m_ppu {};
 
 	std::size_t m_cycleBudget = std::numeric_limits<std::size_t>::max();
 
 	void spendCycle();
+	void advanceClock(U32 cycles);
 	U32  accessCycles(U32 address) const;
 	U8   readCycle(U32 address, CycleKind kind, bool memoryLock = false);
 

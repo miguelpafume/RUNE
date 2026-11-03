@@ -9,7 +9,10 @@
 
 namespace SNES {
 
-System::System() { m_bus.attachApu(m_apu); }
+System::System() {
+	m_bus.attachApu(m_apu);
+	m_bus.attachPpu(m_ppu);
+}
 
 const U8* System::framebuffer() { return m_framebuffer.data(); }
 
@@ -59,14 +62,21 @@ void System::printCartridge(const std::string& romPath) const {
 	}
 }
 
-void System::runFrame() {}
+// A frame ends when V goes back to 0
+void System::runFrame() {
+	const U64 frame = m_ppu.frames();
+
+	while (m_ppu.frames() == frame) {
+		m_cpu.step();
+	}
+}
 
 std::string System::traceLine() const {
 	const CPU::Registers& registers = m_cpu.getRegisters();
 
-	return std::format("{:02X}{:04X} A:{:04X} X:{:04X} Y:{:04X} S:{:04X} D:{:04X} DB:{:02X} P:{:02X} MC:{}", registers.PB,
+	return std::format("{:02X}{:04X} A:{:04X} X:{:04X} Y:{:04X} S:{:04X} D:{:04X} DB:{:02X} P:{:02X} V:{} H:{} MC:{}", registers.PB,
 	                   registers.PC, registers.A, registers.X, registers.Y, registers.S, registers.D, registers.DB, registers.P,
-	                   m_bus.masterCycles());
+	                   m_ppu.scanline(), m_ppu.hClock(), m_bus.masterCycles());
 }
 
 } // namespace SNES

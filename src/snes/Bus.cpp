@@ -1,8 +1,8 @@
 #include "Bus.hpp"
-
 #include "APU.hpp"
 #include "Cartridge.hpp"
 #include "Constants.hpp"
+#include "PPU.hpp"
 
 #include <cstddef>
 #include <limits>
@@ -46,10 +46,19 @@ constexpr U16 INTERNAL_LAST = 0x421F;
 constexpr U16 DMA_FIRST = 0x4300; // 8 channels x 16 bytes
 constexpr U16 DMA_LAST = 0x437F;
 constexpr U16 MEMSEL = 0x420D;
+constexpr U16 RDNMI = 0x4210;
 
 constexpr U8 MEMSEL_FASTROM = 0x01;
 
+constexpr U8 RDNMI_FLAG = 0x80;
+constexpr U8 RDNMI_OPEN_BUS_MASK = 0x70;
+constexpr U8 CPU_VERSION = 0x02; // the value bsnes and MesenCE report
+
 constexpr U32 CYCLES_INTERNAL = CYCLES_FAST; // cycles that don't touch memory take 6 too
+
+// The CPU stops for this once per line, while the WRAM refreshes
+constexpr U32 DRAM_REFRESH_POSITION = 538;
+constexpr U32 DRAM_REFRESH_CYCLES = 40;
 
 Bus::Bus(Mode mode) : m_mode {mode} {
 	if (m_mode == Mode::Test) {
@@ -61,6 +70,25 @@ Bus::Bus(Mode mode) : m_mode {mode} {
 
 	m_wram.assign(WRAM_SIZE, WRAM_POWER_ON_VALUE);
 	mapConsole();
+}
+
+// System mode only, all the time in the console passes through here
+void Bus::advanceClock(U32 cycles) {
+	const U32  hClockBefore = m_ppu->hClock();
+	const bool vBlankBefore = m_ppu->inVBlank();
+
+	m_masterCycles += cycles;
+	m_ppu->advance(cycles);
+
+	// Goes up when V-Blank starts and down when it ends
+	if (m_ppu->inVBlank() != vBlankBefore) {
+		m_nmiFlag = m_ppu->inVBlank();
+	}
+
+	// Accesses cost 6, 8 or 12, so H can jump over the exact position
+	if (hClockBefore < DRAM_REFRESH_POSITION && m_ppu->hClock() >= DRAM_REFRESH_POSITION) {
+		advanceClock(DRAM_REFRESH_CYCLES);
+	}
 }
 
 // runs before the cycle does anything, so a write past the limit never reaches memory
@@ -84,7 +112,7 @@ U8 Bus::readCycle(U32 address, CycleKind kind, bool memoryLock) {
 
 	// bsnes and MesenCE charge part of this after the access. We charge it all first,
 	// the exact moment doesn't matter because the PPU renders whole lines
-	m_masterCycles += accessCycles(target);
+	advanceClock(accessCycles(target));
 
 	const U8 value = readSystem(target);
 
@@ -170,7 +198,7 @@ void Bus::writeData(U32 address, U8 value, bool memoryLock) {
 		return;
 	}
 
-	m_masterCycles += accessCycles(target);
+	advanceClock(accessCycles(target));
 
 	m_openBus = value;
 	writeSystem(target, value);
@@ -186,7 +214,7 @@ void Bus::internalCycle(U32 address, bool memoryLock) {
 		return;
 	}
 
-	m_masterCycles += CYCLES_INTERNAL;
+	advanceClock(CYCLES_INTERNAL);
 }
 
 void Bus::invalidWrite(U32 address, U8 value, bool memoryLock) {
@@ -199,7 +227,7 @@ void Bus::invalidWrite(U32 address, U8 value, bool memoryLock) {
 		return;
 	}
 
-	m_masterCycles += CYCLES_INTERNAL;
+	advanceClock(CYCLES_INTERNAL);
 }
 
 void Bus::haltedCycle() {
@@ -210,7 +238,7 @@ void Bus::haltedCycle() {
 		return;
 	}
 
-	m_masterCycles += CYCLES_INTERNAL;
+	advanceClock(CYCLES_INTERNAL);
 }
 
 void Bus::setFlags(bool emulation, bool flagM, bool flagX) {
@@ -378,7 +406,16 @@ U8 Bus::readCpuRegister(U32 address) {
 	}
 
 	if (offset >= INTERNAL_FIRST && offset <= INTERNAL_LAST) {
-		// TODO: $4210-$421F status, results and auto joypad
+		if (offset == RDNMI) {
+			const U8 value = static_cast<U8>((m_nmiFlag ? RDNMI_FLAG : 0) | (m_openBus & RDNMI_OPEN_BUS_MASK) | CPU_VERSION);
+
+			// Reading clears the flag
+			m_nmiFlag = false;
+
+			return value;
+		}
+
+		// TODO: $4211-$421F status, results and auto joypad
 		return m_openBus;
 	}
 

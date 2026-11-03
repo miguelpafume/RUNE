@@ -5,6 +5,7 @@
 #include "CPU.hpp"
 #include "Cartridge.hpp"
 #include "Constants.hpp"
+#include "PPU.hpp"
 #include "rune/Types.hpp"
 
 #include <optional>
@@ -32,6 +33,7 @@ private:
 	Bus m_bus {Bus::Mode::System};
 	CPU m_cpu {m_bus};
 	APU m_apu {};
+	PPU m_ppu {};
 
 	std::optional<Cartridge> m_cartridge {};
 

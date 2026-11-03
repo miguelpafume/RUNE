@@ -15,6 +15,9 @@ constexpr U32 CYCLES_PER_SCANLINE = DOTS_PER_SCANLINE * CYCLES_PER_DOT; // 1364
 constexpr U32 SCANLINES_PER_FRAME = 262;
 constexpr U32 CYCLES_PER_FRAME = CYCLES_PER_SCANLINE * SCANLINES_PER_FRAME;
 
+// One dot shorter in odd frames
+constexpr U32 SHORT_SCANLINE = 240;
+
 // Memory access costs, in master cycles
 constexpr U32 CYCLES_FAST = 6;   // internal registers, FastROM
 constexpr U32 CYCLES_SLOW = 8;   // WRAM, SlowROM, cartridge
