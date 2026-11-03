@@ -9,7 +9,7 @@
 
 namespace SNES {
 
-System::System() {}
+System::System() { m_bus.attachApu(m_apu); }
 
 const U8* System::framebuffer() { return m_framebuffer.data(); }
 
@@ -30,6 +30,8 @@ void System::loadRom(const std::string& romPath) {
 	m_cartridge->map(m_bus);
 
 	printCartridge(romPath);
+
+	m_cpu.reset();
 }
 
 void System::printCartridge(const std::string& romPath) const {
@@ -58,5 +60,13 @@ void System::printCartridge(const std::string& romPath) const {
 }
 
 void System::runFrame() {}
+
+std::string System::traceLine() const {
+	const CPU::Registers& registers = m_cpu.getRegisters();
+
+	return std::format("{:02X}{:04X} A:{:04X} X:{:04X} Y:{:04X} S:{:04X} D:{:04X} DB:{:02X} P:{:02X} MC:{}", registers.PB,
+	                   registers.PC, registers.A, registers.X, registers.Y, registers.S, registers.D, registers.DB, registers.P,
+	                   m_bus.masterCycles());
+}
 
 } // namespace SNES

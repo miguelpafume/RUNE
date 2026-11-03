@@ -444,7 +444,7 @@ void CPU::instructionWAI() {
 	m_bus.haltedCycle();
 }
 
-// TODO: only a reset ends STP
+// only reset() ends STP
 void CPU::instructionSTP() {
 	idleImplied();
 	idleImplied();

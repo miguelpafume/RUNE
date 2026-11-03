@@ -15,6 +15,7 @@ using RUNE::U32;
 using RUNE::U64;
 using RUNE::U8;
 
+class APU;
 class Cartridge;
 
 class Bus {
@@ -72,6 +73,7 @@ public:
 	void haltedCycle();
 
 	void attachCartridge(Cartridge& cartridge) { m_cartridge = &cartridge; }
+	void attachApu(APU& apu) { m_apu = &apu; }
 
 	// Read that doesn't change anything, used by the comparator and the viewers
 	U8 peek(U32 address) const;
@@ -124,6 +126,7 @@ private:
 	bool m_flagX {};
 
 	Cartridge* m_cartridge {};
+	APU*       m_apu {};
 
 	std::size_t m_cycleBudget = std::numeric_limits<std::size_t>::max();
 

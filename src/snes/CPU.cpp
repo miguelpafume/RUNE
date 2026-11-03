@@ -30,6 +30,36 @@ CPU::CPU(Bus& bus) : m_bus {bus} {}
 
 // Execution
 
+// Takes 186 master cycles until the first fetch, same as bsnes and MesenCE
+void CPU::reset() {
+	m_registers = {};
+	m_registers.S = EMULATION_STACK_PAGE | LOW_BYTE_MASK;
+	m_registers.P = FLAG_M | FLAG_X | FLAG_I;
+	m_registers.E = true;
+	m_waiting = false;
+	m_stopped = false;
+
+	for (int cycle = 0; cycle < RESET_IDLE_CYCLES; cycle++) {
+		idleImplied();
+	}
+
+	read(programAddress());
+	idleImplied();
+
+	// Same steps as an interrupt, but the pushes are reads here. S still goes down and ends at
+	// $01FC like in bsnes, while MesenCE and snes9x leave it at $01FF
+	for (int cycle = 0; cycle < RESET_STACK_CYCLES; cycle++) {
+		read(m_registers.S);
+
+		m_registers.S = EMULATION_STACK_PAGE | ((m_registers.S - 1) & LOW_BYTE_MASK);
+	}
+
+	const U8 low = m_bus.fetchVector(VECTOR_EMULATION_RESET);
+	const U8 high = m_bus.fetchVector(VECTOR_EMULATION_RESET + 1);
+
+	m_registers.PC = static_cast<U16>(high << 8 | low);
+}
+
 void CPU::step() {
 	// WAI/STP: the clock keeps going but nothing is fetched
 	if (m_stopped || m_waiting) {

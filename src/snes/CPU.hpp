@@ -35,6 +35,9 @@ public:
 	const Registers& getRegisters() const { return m_registers; }
 	void             setRegisters(const Registers& registers);
 
+	// Power-on state and the jump to the reset vector
+	void reset();
+
 	// Runs a full instruction
 	void step();
 
@@ -66,6 +69,10 @@ private:
 
 	// In emulation, the stack is in page $01
 	static constexpr U16 EMULATION_STACK_PAGE = 0x0100;
+
+	// Cycles before the reset sequence starts, the CPU is busy coming out of reset
+	static constexpr int RESET_IDLE_CYCLES = 22;
+	static constexpr int RESET_STACK_CYCLES = 3;
 
 	// Locks the bus (MLB low) during read-modify-write
 	static constexpr bool LOCK = true;

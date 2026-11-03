@@ -1,5 +1,6 @@
 #include "Bus.hpp"
 
+#include "APU.hpp"
 #include "Cartridge.hpp"
 #include "Constants.hpp"
 
@@ -30,6 +31,8 @@ constexpr U16 PPU_FIRST = 0x2100;
 constexpr U16 PPU_LAST = 0x213F;
 constexpr U16 APU_FIRST = 0x2140; // four ports, mirrored up to $217F
 constexpr U16 APU_LAST = 0x217F;
+constexpr U16 APU_PORT_MASK = 0x0003;
+
 constexpr U16 WMDATA = 0x2180;
 constexpr U16 WMADDL = 0x2181;
 constexpr U16 WMADDM = 0x2182;
@@ -316,8 +319,7 @@ U8 Bus::readExternalRegister(U32 address) {
 	}
 
 	if (offset >= APU_FIRST && offset <= APU_LAST) {
-		// TODO: APU stub, port offset & 3
-		return m_openBus;
+		return m_apu->readPort(static_cast<U8>(offset & APU_PORT_MASK));
 	}
 
 	// $2181-$2183 can only be written
@@ -340,7 +342,7 @@ void Bus::writeExternalRegister(U32 address, U8 value) {
 	}
 
 	if (offset >= APU_FIRST && offset <= APU_LAST) {
-		// TODO: APU stub, port offset & 3
+		m_apu->writePort(static_cast<U8>(offset & APU_PORT_MASK), value);
 		return;
 	}
 

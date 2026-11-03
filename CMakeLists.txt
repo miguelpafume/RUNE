@@ -44,6 +44,11 @@ target_compile_definitions(snes_tests PRIVATE
 )
 
 add_test(NAME processor_tests COMMAND snes_tests)
+
+add_executable(snes_trace tests/harness/trace.cpp)
+
+target_link_libraries(snes_trace PRIVATE snes_core)
+
 # --- TEST SECTION END ---
 
 if (SNES_BUILD_FRONTEND)
