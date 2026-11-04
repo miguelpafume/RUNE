@@ -12,6 +12,7 @@ namespace SNES {
 System::System() {
 	m_bus.attachApu(m_apu);
 	m_bus.attachPpu(m_ppu);
+	m_bus.attachDma(m_dma);
 }
 
 const U8* System::framebuffer() { return m_framebuffer.data(); }

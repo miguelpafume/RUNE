@@ -10,6 +10,7 @@ add_library(snes_core STATIC
   src/snes/Cartridge.cpp
   src/snes/Bus.cpp
   src/snes/CPU.cpp
+  src/snes/DMA.cpp
   src/snes/PPU.cpp
   src/snes/APU.cpp
   src/snes/System.cpp
@@ -27,6 +28,7 @@ FetchContent_Declare(json
 FetchContent_MakeAvailable(json)
 
 # --- TEST SECTION START ---
+
 enable_testing()
 
 add_executable(snes_tests
@@ -48,6 +50,10 @@ add_test(NAME processor_tests COMMAND snes_tests)
 add_executable(snes_trace tests/harness/trace.cpp)
 
 target_link_libraries(snes_trace PRIVATE snes_core)
+
+add_executable(snes_bgtext tests/harness/bgtext.cpp)
+
+target_link_libraries(snes_bgtext PRIVATE snes_core)
 
 # --- TEST SECTION END ---
 

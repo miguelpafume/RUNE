@@ -2,6 +2,7 @@
 #include "APU.hpp"
 #include "Cartridge.hpp"
 #include "Constants.hpp"
+#include "DMA.hpp"
 #include "PPU.hpp"
 
 #include <cstddef>
@@ -45,6 +46,7 @@ constexpr U16 INTERNAL_FIRST = 0x4200; // NMI/IRQ, multiply and divide, auto joy
 constexpr U16 INTERNAL_LAST = 0x421F;
 constexpr U16 DMA_FIRST = 0x4300; // 8 channels x 16 bytes
 constexpr U16 DMA_LAST = 0x437F;
+constexpr U16 MDMAEN = 0x420B;
 constexpr U16 MEMSEL = 0x420D;
 constexpr U16 RDNMI = 0x4210;
 
@@ -91,6 +93,18 @@ void Bus::advanceClock(U32 cycles) {
 	}
 }
 
+// One CPU cycle. If it comes right after a write to $420B, the DMA goes first
+void Bus::chargeAccess(U32 cycles) {
+	if (m_dmaPending != 0) {
+		const U8 channels = m_dmaPending;
+
+		m_dmaPending = 0;
+		m_dma->run(channels, cycles);
+	}
+
+	advanceClock(cycles);
+}
+
 // runs before the cycle does anything, so a write past the limit never reaches memory
 void Bus::spendCycle() {
 	if (m_accessLog.size() >= m_cycleBudget)
@@ -112,7 +126,7 @@ U8 Bus::readCycle(U32 address, CycleKind kind, bool memoryLock) {
 
 	// bsnes and MesenCE charge part of this after the access. We charge it all first,
 	// the exact moment doesn't matter because the PPU renders whole lines
-	advanceClock(accessCycles(target));
+	chargeAccess(accessCycles(target));
 
 	const U8 value = readSystem(target);
 
@@ -198,7 +212,7 @@ void Bus::writeData(U32 address, U8 value, bool memoryLock) {
 		return;
 	}
 
-	advanceClock(accessCycles(target));
+	chargeAccess(accessCycles(target));
 
 	m_openBus = value;
 	writeSystem(target, value);
@@ -214,7 +228,7 @@ void Bus::internalCycle(U32 address, bool memoryLock) {
 		return;
 	}
 
-	advanceClock(CYCLES_INTERNAL);
+	chargeAccess(CYCLES_INTERNAL);
 }
 
 void Bus::invalidWrite(U32 address, U8 value, bool memoryLock) {
@@ -227,7 +241,7 @@ void Bus::invalidWrite(U32 address, U8 value, bool memoryLock) {
 		return;
 	}
 
-	advanceClock(CYCLES_INTERNAL);
+	chargeAccess(CYCLES_INTERNAL);
 }
 
 void Bus::haltedCycle() {
@@ -238,13 +252,25 @@ void Bus::haltedCycle() {
 		return;
 	}
 
-	advanceClock(CYCLES_INTERNAL);
+	chargeAccess(CYCLES_INTERNAL);
 }
 
 void Bus::setFlags(bool emulation, bool flagM, bool flagX) {
 	m_flagE = emulation;
 	m_flagM = flagM;
 	m_flagX = flagX;
+}
+
+// An invalid access still takes its time, but it reads $00 and writes nothing
+U8 Bus::dmaRead(U32 address, bool valid) {
+	m_openBus = valid ? readSystem(address) : U8 {0x00};
+
+	return m_openBus;
+}
+
+void Bus::dmaWrite(U32 address, U8 value, bool valid) {
+	if (valid)
+		writeSystem(address, value);
 }
 
 U8 Bus::readSystem(U32 address) {
@@ -342,8 +368,7 @@ U8 Bus::readExternalRegister(U32 address) {
 	const U16 offset = address & 0xFFFF;
 
 	if (offset >= PPU_FIRST && offset <= PPU_LAST) {
-		// TODO: PPU registers
-		return m_openBus;
+		return m_ppu->readRegister(offset, m_openBus);
 	}
 
 	if (offset >= APU_FIRST && offset <= APU_LAST) {
@@ -365,7 +390,7 @@ void Bus::writeExternalRegister(U32 address, U8 value) {
 	const U16 offset = address & 0xFFFF;
 
 	if (offset >= PPU_FIRST && offset <= PPU_LAST) {
-		// TODO: PPU registers
+		m_ppu->writeRegister(offset, value);
 		return;
 	}
 
@@ -420,8 +445,7 @@ U8 Bus::readCpuRegister(U32 address) {
 	}
 
 	if (offset >= DMA_FIRST && offset <= DMA_LAST) {
-		// TODO: DMA channel registers
-		return m_openBus;
+		return m_dma->readRegister(offset, m_openBus);
 	}
 
 	return m_openBus;
@@ -437,11 +461,15 @@ void Bus::writeCpuRegister(U32 address, U8 value) {
 
 	if (offset >= INTERNAL_FIRST && offset <= INTERNAL_LAST) {
 		switch (offset) {
+		case MDMAEN :
+			m_dmaPending = value;
+			break;
+
 		case MEMSEL : // ROM in banks $80-$FF runs at 6 cycles when set
 			m_fastRom = (value & MEMSEL_FASTROM) != 0;
 			break;
 
-		default : // TODO: $4200-$420C NMI/IRQ enable, multiply and divide, DMA start
+		default : // TODO: $4200-$420C NMI/IRQ enable, multiply and divide, HDMA start
 			break;
 		}
 
@@ -449,7 +477,7 @@ void Bus::writeCpuRegister(U32 address, U8 value) {
 	}
 
 	if (offset >= DMA_FIRST && offset <= DMA_LAST) {
-		// TODO: DMA channel registers
+		m_dma->writeRegister(offset, value);
 		return;
 	}
 }

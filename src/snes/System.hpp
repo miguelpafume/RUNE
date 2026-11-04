@@ -5,6 +5,7 @@
 #include "CPU.hpp"
 #include "Cartridge.hpp"
 #include "Constants.hpp"
+#include "DMA.hpp"
 #include "PPU.hpp"
 #include "rune/Types.hpp"
 
@@ -29,11 +30,14 @@ public:
 
 	const U8* framebuffer();
 
+	const PPU& ppu() const { return m_ppu; }
+
 private:
 	Bus m_bus {Bus::Mode::System};
 	CPU m_cpu {m_bus};
 	APU m_apu {};
 	PPU m_ppu {};
+	DMA m_dma {m_bus};
 
 	std::optional<Cartridge> m_cartridge {};
 

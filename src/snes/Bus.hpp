@@ -17,6 +17,7 @@ using RUNE::U8;
 
 class APU;
 class Cartridge;
+class DMA;
 class PPU;
 
 class Bus {
@@ -76,12 +77,17 @@ public:
 	void attachCartridge(Cartridge& cartridge) { m_cartridge = &cartridge; }
 	void attachApu(APU& apu) { m_apu = &apu; }
 	void attachPpu(PPU& ppu) { m_ppu = &ppu; }
+	void attachDma(DMA& dma) { m_dma = &dma; }
 
 	// Read that doesn't change anything, used by the comparator and the viewers
 	U8 peek(U32 address) const;
 
 	// System mode only
-	U64 masterCycles() const { return m_masterCycles; }
+	U64  masterCycles() const { return m_masterCycles; }
+	void advanceClock(U32 cycles);
+
+	U8   dmaRead(U32 address, bool valid);
+	void dmaWrite(U32 address, U8 value, bool valid);
 
 	// Test mode only
 	void                       poke(U32 address, U8 value);
@@ -131,11 +137,14 @@ private:
 	Cartridge* m_cartridge {};
 	APU*       m_apu {};
 	PPU*       m_ppu {};
+	DMA*       m_dma {};
+
+	U8 m_dmaPending {}; // channels written to $420B
 
 	std::size_t m_cycleBudget = std::numeric_limits<std::size_t>::max();
 
 	void spendCycle();
-	void advanceClock(U32 cycles);
+	void chargeAccess(U32 cycles);
 	U32  accessCycles(U32 address) const;
 	U8   readCycle(U32 address, CycleKind kind, bool memoryLock = false);
 
