@@ -61,7 +61,7 @@ target_link_libraries(snes_frame PRIVATE snes_core)
 if (SNES_BUILD_FRONTEND)
   FetchContent_Declare(MAGE
     GIT_REPOSITORY https://github.com/miguelpafume/MAGE-Engine.git
-    GIT_TAG v0.1.2
+    GIT_TAG v0.1.3
   )
 
   FetchContent_MakeAvailable(MAGE)

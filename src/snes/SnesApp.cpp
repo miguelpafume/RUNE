@@ -44,7 +44,7 @@ void SnesApp::run() {
     }
 
     // The PPU framebuffer is uploaded once per frame with nearest-neighbor filtering
-    m_displayTexture = std::make_unique<MAGE::Texture>(m_engine.getDevice(), m_snes.framebuffer(), SNES::VIDEO_WIDTH, SNES::VIDEO_HEIGHT);
+    m_displayTexture = std::make_unique<MAGE::Texture>(m_engine.getDevice(), m_snes.framebuffer(), SNES::VIDEO_WIDTH, SNES::VIDEO_HEIGHT, VK_FILTER_NEAREST, VK_FORMAT_R8G8B8A8_UNORM);
     
     VkDescriptorImageInfo displayInfo = m_displayTexture->descriptorInfo();
     VkDescriptorSet displayDescriptorSet;
