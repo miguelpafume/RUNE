@@ -48,12 +48,13 @@ target_compile_definitions(snes_tests PRIVATE
 add_test(NAME processor_tests COMMAND snes_tests)
 
 add_executable(snes_trace tests/harness/trace.cpp)
-
 target_link_libraries(snes_trace PRIVATE snes_core)
 
 add_executable(snes_bgtext tests/harness/bgtext.cpp)
-
 target_link_libraries(snes_bgtext PRIVATE snes_core)
+
+add_executable(snes_frame tests/harness/frame.cpp)
+target_link_libraries(snes_frame PRIVATE snes_core)
 
 # --- TEST SECTION END ---
 

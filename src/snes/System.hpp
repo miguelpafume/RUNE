@@ -28,7 +28,7 @@ public:
 
 	std::string traceLine() const;
 
-	const U8* framebuffer();
+	const U8* framebuffer() const { return m_ppu.framebuffer().data(); }
 
 	const PPU& ppu() const { return m_ppu; }
 
@@ -42,9 +42,6 @@ private:
 	std::optional<Cartridge> m_cartridge {};
 
 	void printCartridge(const std::string& romPath) const;
-
-	// TEMP
-	const std::vector<U8> m_framebuffer = std::vector<U8>(VIDEO_HEIGHT * VIDEO_WIDTH * 4, 0xFF);
 };
 
 } // namespace SNES

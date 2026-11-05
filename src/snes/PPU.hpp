@@ -3,6 +3,7 @@
 #include "Constants.hpp"
 #include "rune/Types.hpp"
 
+#include <array>
 #include <cstddef>
 #include <vector>
 
@@ -29,8 +30,20 @@ public:
 
 	const std::vector<U16>& vram() const { return m_vram; }
 	const std::vector<U16>& cgram() const { return m_cgram; }
+	const std::vector<U8>&  framebuffer() const { return m_framebuffer; }
 
 private:
+	// $2105, $2107-$2114 and $212C
+	struct Background {
+		U16  mapAddress {};  // in words
+		U8   mapSize {};     // bit 0 doubles the width, bit 1 the height
+		U16  tileAddress {}; // in words
+		U16  hScroll {};
+		U16  vScroll {};
+		bool bigTiles {}; // 16x16
+		bool onMainScreen {};
+	};
+
 	U32 m_hClock {}; // master cycles since the line started
 	U32 m_scanline {};
 	U64 m_frames {};
@@ -42,6 +55,14 @@ private:
 	std::vector<U16> m_cgram = std::vector<U16>(CGRAM_COLORS);
 
 	bool m_forcedBlank = true; // $2100 bit 7
+	U8   m_brightness {};      // $2100 bits 0-3
+	U8   m_bgMode {};          // $2105 bits 0-2
+
+	std::array<Background, 4> m_backgrounds {};
+
+	// Every scroll register shares these two
+	U8 m_scrollLatch {};
+	U8 m_hScrollLatch {};
 
 	U16  m_vramAddress {};
 	U16  m_vramIncrement = 1;
@@ -54,11 +75,16 @@ private:
 	U8   m_cgramLatch {};
 	U8   m_ppu2LastRead {};
 
+	std::vector<U8> m_framebuffer = std::vector<U8>(std::size_t {VIDEO_WIDTH} * VIDEO_HEIGHT * 4); // RGBA
+
 	// While the PPU draws, the VRAM is all its own
 	bool canAccessVram() const { return m_forcedBlank || inVBlank(); }
 	U16  vramIndex() const;
 	U16  readVram() const;
 	void stepVramAddress();
+
+	void renderLine();
+	U8   backgroundPixel(const Background& background, U32 hPosition, U32 vPosition) const;
 };
 
 } // namespace SNES

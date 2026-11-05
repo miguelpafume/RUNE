@@ -15,8 +15,6 @@ System::System() {
 	m_bus.attachDma(m_dma);
 }
 
-const U8* System::framebuffer() { return m_framebuffer.data(); }
-
 void System::loadRom(const std::string& romPath) {
 	// file_size already throws a useful error if the file doesn't exist
 	std::vector<U8> image(std::filesystem::file_size(romPath));
