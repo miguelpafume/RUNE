@@ -6,6 +6,11 @@ namespace SNES {
 
 constexpr U16 INIDISP = 0x2100;
 
+constexpr U16 OBSEL = 0x2101;
+constexpr U16 OAMADDL = 0x2102;
+constexpr U16 OAMADDH = 0x2103;
+constexpr U16 OAMDATA = 0x2104;
+
 constexpr U16 BGMODE = 0x2105;
 constexpr U16 BG1SC = 0x2107;
 constexpr U16 BG2SC = 0x2108;
@@ -33,6 +38,7 @@ constexpr U16 CGDATA = 0x2122;
 
 constexpr U16 TM = 0x212C;
 
+constexpr U16 RDOAM = 0x2138;
 constexpr U16 RDVRAML = 0x2139;
 constexpr U16 RDVRAMH = 0x213A;
 constexpr U16 RDCGRAM = 0x213B;
@@ -40,7 +46,11 @@ constexpr U16 RDCGRAM = 0x213B;
 constexpr U8 INIDISP_FORCED_BLANK = 0x80;
 constexpr U8 INIDISP_BRIGHTNESS_MASK = 0x0F;
 
+constexpr U8 OAMADDH_PRIORITY_ROTATION = 0x80;
+
 constexpr U8 BGMODE_BG3_ON_TOP = 0x08;
+
+constexpr U8 TM_SPRITES = 0x10;
 
 constexpr U8 VMAIN_INCREMENT_ON_HIGH = 0x80;
 
@@ -54,6 +64,20 @@ constexpr U16 MAP_PRIORITY = 0x2000;
 constexpr U16 MAP_TILE_MASK = 0x03FF;
 
 constexpr U32 MAX_BRIGHTNESS = 15;
+
+constexpr U16 OAM_ADDRESS_MASK = 0x3FF;
+constexpr U16 OAM_HIGH_TABLE = 0x200;
+
+constexpr U32 SPRITE_COUNT = 128;
+constexpr U32 MAX_SPRITES_PER_LINE = 32;
+constexpr U32 MAX_SPRITE_TILES_PER_LINE = 34;
+constexpr U32 SPRITE_PALETTE_BASE = 128;
+
+// Small and large sprite sizes for each value of $2101 bits 5-7
+constexpr std::array<U32, 8> SMALL_WIDTHS {8, 8, 8, 16, 16, 32, 16, 16};
+constexpr std::array<U32, 8> SMALL_HEIGHTS {8, 8, 8, 16, 16, 32, 32, 32};
+constexpr std::array<U32, 8> LARGE_WIDTHS {16, 32, 64, 32, 64, 64, 32, 32};
+constexpr std::array<U32, 8> LARGE_HEIGHTS {16, 32, 64, 32, 64, 64, 64, 32};
 
 // Same moment as the fast PPU of bsnes. A write after this only shows on the next line
 constexpr U32 RENDER_POSITION = 512;
@@ -80,11 +104,19 @@ void PPU::advance(U32 cycles) {
 	m_hClock -= length;
 	m_scanline++;
 
+	// Every V-Blank starts the OAM address over, unless the screen is off
+	if (m_scanline == VBLANK_START_LINE && !m_forcedBlank) {
+		m_oamAddress = m_oamBaseAddress;
+	}
+
 	if (m_scanline == SCANLINES_PER_FRAME) {
 		m_scanline = 0;
 		m_frames++;
 	}
 }
+
+// The high table is only 32 bytes, repeated over the whole upper half of the address
+static U16 oamIndex(U16 address) { return (address & OAM_HIGH_TABLE) ? (OAM_HIGH_TABLE | (address & 0x1F)) : address; }
 
 U8 PPU::readRegister(U16 address, U8 openBus) {
 	switch (address) {
@@ -127,7 +159,15 @@ U8 PPU::readRegister(U16 address, U8 openBus) {
 		return m_ppu2LastRead;
 	}
 
-	default : // TODO: the other read registers, $2134-$2138 and $213C-$213F
+	case RDOAM : {
+		const U8 value = m_oam[oamIndex(m_oamAddress)];
+
+		m_oamAddress = (m_oamAddress + 1) & OAM_ADDRESS_MASK;
+
+		return value;
+	}
+
+	default : // TODO: the other read registers, $2134-$2137 and $213C-$213F
 		return openBus;
 	}
 }
@@ -138,6 +178,43 @@ void PPU::writeRegister(U16 address, U8 value) {
 		m_forcedBlank = (value & INIDISP_FORCED_BLANK) != 0;
 		m_brightness = value & INIDISP_BRIGHTNESS_MASK;
 		break;
+
+	case OBSEL :
+		m_spriteTileAddress = (value << 13) & 0x6000;
+		m_spriteNameGap = (value >> 3) & 0x03;
+		m_spriteSize = (value >> 5) & 0x07;
+		break;
+
+	// The register counts in words, the address inside counts in bytes
+	case OAMADDL :
+		m_oamBaseAddress = static_cast<U16>((m_oamBaseAddress & 0x0200) | (value << 1));
+		m_oamAddress = m_oamBaseAddress;
+		break;
+
+	case OAMADDH :
+		m_oamBaseAddress = static_cast<U16>(((value & 0x01) << 9) | (m_oamBaseAddress & 0x01FE));
+		m_oamPriorityRotation = (value & OAMADDH_PRIORITY_ROTATION) != 0;
+		m_oamAddress = m_oamBaseAddress;
+		break;
+
+	// The low table only takes a whole word, so the even byte waits for the odd one
+	case OAMDATA : {
+		const U16 oamAddress = m_oamAddress;
+
+		if (!(oamAddress & 0x01)) {
+			m_oamLatch = value;
+		}
+
+		if (oamAddress & OAM_HIGH_TABLE) {
+			m_oam[oamIndex(oamAddress)] = value;
+		} else if (oamAddress & 0x01) {
+			m_oam[oamAddress - 1] = m_oamLatch;
+			m_oam[oamAddress] = value;
+		}
+
+		m_oamAddress = (oamAddress + 1) & OAM_ADDRESS_MASK;
+		break;
+	}
 
 	case BGMODE :
 		m_bgMode = value & 0x07;
@@ -245,13 +322,15 @@ void PPU::writeRegister(U16 address, U8 value) {
 		m_cgramHighByte = !m_cgramHighByte;
 		break;
 
-	case TM : // TODO: bit 4, sprites
+	case TM :
 		for (U32 number = 0; number < m_backgrounds.size(); number++) {
 			m_backgrounds[number].onMainScreen = (value & (1u << number)) != 0;
 		}
+
+		m_spritesOnMainScreen = (value & TM_SPRITES) != 0;
 		break;
 
-	default : // TODO: the other write registers, $2101-$2133
+	default : // TODO: the other write registers, $2106 and $211A-$2133
 		break;
 	}
 }
@@ -324,12 +403,32 @@ const PPU::LayerFormat& PPU::layerFormat(U32 number) const {
 	}
 }
 
+// Where each of the 4 sprite priorities falls among the backgrounds
+U8 PPU::spritePriority(U32 priority) const {
+	static constexpr std::array<U8, 4> MODE_0 {3, 6, 9, 12};
+	static constexpr std::array<U8, 4> MODE_1 {2, 4, 7, 10};
+	static constexpr std::array<U8, 4> MODE_1_BG3_ON_TOP {2, 3, 6, 9};
+
+	switch (m_bgMode) {
+	case 0 :
+		return MODE_0[priority];
+
+	case 1 :
+		return m_bg3OnTop ? MODE_1_BG3_ON_TOP[priority] : MODE_1[priority];
+
+	default : // TODO: modes 2-7
+		return 0;
+	}
+}
+
 void PPU::renderLine() {
 	m_line.fill({});
 
 	for (U32 number = 0; number < m_backgrounds.size(); number++) {
 		renderBackground(number);
 	}
+
+	renderSprites();
 
 	const U32 brightness = m_forcedBlank ? 0 : m_brightness;
 
@@ -406,14 +505,7 @@ PPU::LinePixel PPU::backgroundPixel(U32 number, const LayerFormat& format, U32 h
 	// 2 bits take 8 words per tile, 4 bits take 16
 	const U32 rowAddress = background.tileAddress + (tile & MAP_TILE_MASK) * format.bitsPerPixel * 4 + row;
 
-	U32 color = 0;
-
-	// Each word holds 2 bits of each pixel of the row. With 4 bits, the other two come 8 words later
-	for (U32 pair = 0; pair < format.bitsPerPixel / 2u; pair++) {
-		const U16 planes = m_vram[(rowAddress + pair * 8) & VRAM_ADDRESS_MASK];
-
-		color |= (((planes >> bit) & 0x01) | (((planes >> (bit + 8)) & 0x01) << 1)) << (pair * 2);
-	}
+	const U32 color = tileColor(rowAddress, format.bitsPerPixel, bit);
 
 	if (color == 0) {
 		return {};
@@ -427,6 +519,135 @@ PPU::LinePixel PPU::backgroundPixel(U32 number, const LayerFormat& format, U32 h
 	    (entry & MAP_PRIORITY) ? format.highPriority : format.lowPriority,
 	    static_cast<U8>(base + (palette << format.bitsPerPixel) + color)
 	};
+}
+
+// Each sprite takes 4 bytes in the low table and 2 bits in the high one
+PPU::Sprite PPU::readSprite(U32 index) const {
+	const U8*  entry = &m_oam[index * 4];
+	const U32  high = m_oam[OAM_HIGH_TABLE + index / 4] >> ((index & 0x03) * 2);
+	const bool large = (high & 0x02) != 0;
+
+	Sprite sprite;
+
+	sprite.x = entry[0] | (high & 0x01) << 8;
+	sprite.y = entry[1];
+	sprite.tile = entry[2];
+	sprite.secondTable = (entry[3] & 0x01) != 0;
+	sprite.palette = (entry[3] >> 1) & 0x07;
+	sprite.priority = (entry[3] >> 4) & 0x03;
+	sprite.flipX = (entry[3] & 0x40) != 0;
+	sprite.flipY = (entry[3] & 0x80) != 0;
+	sprite.width = large ? LARGE_WIDTHS[m_spriteSize] : SMALL_WIDTHS[m_spriteSize];
+	sprite.height = large ? LARGE_HEIGHTS[m_spriteSize] : SMALL_HEIGHTS[m_spriteSize];
+
+	return sprite;
+}
+
+void PPU::renderSprites() {
+	if (!m_spritesOnMainScreen) {
+		return;
+	}
+
+	// Sprite Y counts from the first line on screen
+	const U32 line = m_scanline - 1;
+
+	// $2103 bit 7 makes the search start at the sprite the OAM address points to
+	const U32 first = m_oamPriorityRotation ? (m_oamAddress >> 2) & 0x7F : 0;
+
+	std::array<Sprite, MAX_SPRITES_PER_LINE> onLine {};
+
+	U32 count = 0;
+
+	for (U32 n = 0; n < SPRITE_COUNT && count < MAX_SPRITES_PER_LINE; n++) {
+		const Sprite sprite = readSprite((first + n) & 0x7F);
+
+		if (sprite.x > 256 && sprite.x + sprite.width - 1 < 512) {
+			continue;
+		}
+
+		if (((line - sprite.y) & 0xFF) < sprite.height) {
+			onLine[count++] = sprite;
+		}
+	}
+
+	// Tiles are fetched from the last sprite back to the first, and only 34 fit in a line
+	// So the first sprites are the ones that lose tiles, and they are drawn last, on top of the others
+	std::array<LinePixel, VIDEO_WIDTH> pixels {};
+
+	U32 tiles = 0;
+
+	for (U32 n = count; n-- > 0 && tiles < MAX_SPRITE_TILES_PER_LINE;) {
+		const Sprite& sprite = onLine[n];
+		const U32     columns = sprite.width / 8;
+		U32           row = (line - sprite.y) & 0xFF;
+
+		// In the tall sizes (16x32 and 32x64) each square half flips in place, so the top half stays on top
+		if (sprite.flipY) {
+			if (sprite.width == sprite.height) {
+				row = sprite.height - 1 - row;
+			} else if (row < sprite.width) {
+				row = sprite.width - 1 - row;
+			} else {
+				row = sprite.width * 3 - 1 - row;
+			}
+		}
+
+		U32 base = m_spriteTileAddress;
+
+		if (sprite.secondTable) {
+			base += (1u + m_spriteNameGap) << 12;
+		}
+
+		// The tiles of a sprite sit in a grid 16 tiles wide, and both numbers wrap inside it
+		const U32 tileRow = ((sprite.tile >> 4) + (row >> 3)) & 0x0F;
+
+		for (U32 column = 0; column < columns && tiles < MAX_SPRITE_TILES_PER_LINE; column++) {
+			const U32 x = (sprite.x + column * 8) & 0x1FF;
+
+			// A tile off the screen takes no time, except in a sprite at X = 256
+			if (sprite.x != 256 && x >= 256 && x + 7 < 512) {
+				continue;
+			}
+
+			tiles++;
+
+			const U32 tileColumn = (sprite.tile + (sprite.flipX ? columns - 1 - column : column)) & 0x0F;
+			const U32 rowAddress = ((base + ((tileRow << 4 | tileColumn) << 4)) & 0x7FF0) + (row & 0x07);
+
+			for (U32 pixel = 0; pixel < 8; pixel++) {
+				const U32 screenX = (x + pixel) & 0x1FF;
+				const U32 color = tileColor(rowAddress, 4, sprite.flipX ? pixel : 7 - pixel);
+
+				if (screenX < VIDEO_WIDTH && color != 0) {
+					pixels[screenX] = {
+					    spritePriority(sprite.priority),
+					    static_cast<U8>(SPRITE_PALETTE_BASE + (sprite.palette << 4) + color),
+					};
+				}
+			}
+		}
+	}
+
+	// Only now the sprites meet the backgrounds, each pixel with the priority of the sprite that won it
+	for (U32 x = 0; x < VIDEO_WIDTH; x++) {
+		if (pixels[x].priority > m_line[x].priority) {
+			m_line[x] = pixels[x];
+		}
+	}
+}
+
+// The color of one pixel in a row of a tile
+// Each word holds 2 bits of each pixel of the row. With 4 bits, the other two come 8 words later
+U32 PPU::tileColor(U32 rowAddress, U32 bitsPerPixel, U32 bit) const {
+	U32 color = 0;
+
+	for (U32 pair = 0; pair < bitsPerPixel / 2; pair++) {
+		const U16 planes = m_vram[(rowAddress + pair * 8) & VRAM_ADDRESS_MASK];
+
+		color |= (((planes >> bit) & 0x01) | (((planes >> (bit + 8)) & 0x01) << 1)) << (pair * 2);
+	}
+
+	return color;
 }
 
 } // namespace SNES

@@ -17,6 +17,7 @@ The `.sfc` files stay out of git, so download them into this folder (no subfolde
 | `SNES_05.sfc` | Sprites | [nesdoug/SNES_05](https://github.com/nesdoug/SNES_05) | `69bb3df` | `b5dd5d3a31a180a66ff6e660d61872c35c40f2676da56119cb7c49a6dd29f76a` |
 | `SNES_06.sfc` | Controller reads moving a sprite | [nesdoug/SNES_06](https://github.com/nesdoug/SNES_06) | `844ae00` | `a586bbae524513f21285ed74ab8e5585ccea6aed6bee50895969a18c05a08f0e` |
 | `SNES_07.sfc` | Pong clone, the first game target | [nesdoug/SNES_07](https://github.com/nesdoug/SNES_07) | `1016a0a` | `749ff9ddb4c57bb4d86b54ee7283e68bb572c2219c6c4e8180984f1ccaf8ab2b` |
+| `SNES_09.sfc` | A sprite moving over a background map, flipped sideways | [nesdoug/SNES_09](https://github.com/nesdoug/SNES_09) | `50257bd` | `60bfd8bb488a29738b5f64a51210d7159a9d47c2a11bac924c2237d29cf65044` |
 
 The PeterLemon/SNES repository declares no license, so its files are used locally and not
 redistributed here. gilyon/snes-tests and the nesdoug/SNES_* repositories are MIT licensed.
@@ -38,4 +39,5 @@ curl -fLO $N/SNES_04/9cb5b5b5f7fcec98e272f0a9494f9031a30491c5/SNES_4B.sfc
 curl -fLO $N/SNES_05/69bb3dff2c6549fc484bfb6a6c95d15033a3940a/SNES_05.sfc
 curl -fLO $N/SNES_06/844ae002eef857396b43ece3ddee93d22571f27c/SNES_06.sfc
 curl -fLO $N/SNES_07/1016a0a3474e783290c5b0828428a0afe4706ce5/SNES_07.sfc
+curl -fLO $N/SNES_09/50257bd197ba5b3a3b1b3be6fcc3f741c5a72994/SNES_09.sfc
 ```
