@@ -435,7 +435,7 @@ void CPU::blockMove() {
 }
 
 // the suite ends the case on the first halted cycle, step() does the ones after it
-// TODO: any interrupt ends WAI, even with I set
+// TODO: an IRQ also ends WAI, even with I set
 void CPU::instructionWAI() {
 	idleImplied();
 	idleImplied();

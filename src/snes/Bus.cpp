@@ -46,15 +46,35 @@ constexpr U16 INTERNAL_FIRST = 0x4200; // NMI/IRQ, multiply and divide, auto joy
 constexpr U16 INTERNAL_LAST = 0x421F;
 constexpr U16 DMA_FIRST = 0x4300; // 8 channels x 16 bytes
 constexpr U16 DMA_LAST = 0x437F;
+constexpr U16 NMITIMEN = 0x4200;
 constexpr U16 MDMAEN = 0x420B;
 constexpr U16 MEMSEL = 0x420D;
 constexpr U16 RDNMI = 0x4210;
+constexpr U16 HVBJOY = 0x4212;
+constexpr U16 JOY_FIRST = 0x4218; // 4 controllers x 2 bytes
+constexpr U16 JOY_LAST = 0x421F;
+
+constexpr U8 NMITIMEN_NMI = 0x80;
+constexpr U8 NMITIMEN_AUTO_JOYPAD = 0x01;
 
 constexpr U8 MEMSEL_FASTROM = 0x01;
 
 constexpr U8 RDNMI_FLAG = 0x80;
 constexpr U8 RDNMI_OPEN_BUS_MASK = 0x70;
 constexpr U8 CPU_VERSION = 0x02; // the value bsnes and MesenCE report
+
+constexpr U8 HVBJOY_VBLANK = 0x80;
+constexpr U8 HVBJOY_HBLANK = 0x40;
+constexpr U8 HVBJOY_JOYPAD_BUSY = 0x01;
+constexpr U8 HVBJOY_OPEN_BUS_MASK = 0x3E;
+
+// H-Blank starts at the end of one line and lasts into the next
+constexpr U32 HBLANK_START = 1096;
+constexpr U32 HBLANK_END = 2;
+
+// The console reads the controllers on its own at the start of V-Blank
+constexpr U32 JOYPAD_READ_POSITION = 130;
+constexpr U32 JOYPAD_READ_CYCLES = 4224;
 
 constexpr U32 CYCLES_INTERNAL = CYCLES_FAST; // cycles that don't touch memory take 6 too
 
@@ -85,12 +105,30 @@ void Bus::advanceClock(U32 cycles) {
 	// Goes up when V-Blank starts and down when it ends
 	if (m_ppu->inVBlank() != vBlankBefore) {
 		m_nmiFlag = m_ppu->inVBlank();
+
+		if (m_nmiFlag && m_nmiEnable) {
+			m_nmiPending = true;
+		}
+	}
+
+	if (m_autoJoypad && m_ppu->scanline() == VBLANK_START_LINE && hClockBefore < JOYPAD_READ_POSITION &&
+	    m_ppu->hClock() >= JOYPAD_READ_POSITION) {
+		m_joypadBusyUntil = m_masterCycles + JOYPAD_READ_CYCLES;
 	}
 
 	// Accesses cost 6, 8 or 12, so H can jump over the exact position
 	if (hClockBefore < DRAM_REFRESH_POSITION && m_ppu->hClock() >= DRAM_REFRESH_POSITION) {
 		advanceClock(DRAM_REFRESH_CYCLES);
 	}
+}
+
+// Taking it also clears it, so each V-Blank fires only one NMI
+bool Bus::takeNmi() {
+	const bool pending = m_nmiPending;
+
+	m_nmiPending = false;
+
+	return pending;
 }
 
 // One CPU cycle. If it comes right after a write to $420B, the DMA goes first
@@ -440,7 +478,31 @@ U8 Bus::readCpuRegister(U32 address) {
 			return value;
 		}
 
-		// TODO: $4211-$421F status, results and auto joypad
+		if (offset == HVBJOY) {
+			const U32 hClock = m_ppu->hClock();
+			U8        value = m_openBus & HVBJOY_OPEN_BUS_MASK;
+
+			if (m_ppu->inVBlank()) {
+				value |= HVBJOY_VBLANK;
+			}
+
+			if (hClock <= HBLANK_END || hClock >= HBLANK_START) {
+				value |= HVBJOY_HBLANK;
+			}
+
+			if (m_masterCycles < m_joypadBusyUntil) {
+				value |= HVBJOY_JOYPAD_BUSY;
+			}
+
+			return value;
+		}
+
+		// TODO: the real buttons, for now nobody is pressing anything
+		if (offset >= JOY_FIRST && offset <= JOY_LAST) {
+			return 0;
+		}
+
+		// TODO: $4211 and $4213-$4217 status and results
 		return m_openBus;
 	}
 
@@ -461,6 +523,19 @@ void Bus::writeCpuRegister(U32 address, U8 value) {
 
 	if (offset >= INTERNAL_FIRST && offset <= INTERNAL_LAST) {
 		switch (offset) {
+		case NMITIMEN : { // TODO: bits 4-5, H/V IRQ
+			const bool enable = (value & NMITIMEN_NMI) != 0;
+
+			// Turning it on in the middle of V-Blank fires right away, if $4210 wasn't read yet
+			if (enable && !m_nmiEnable && m_nmiFlag) {
+				m_nmiPending = true;
+			}
+
+			m_nmiEnable = enable;
+			m_autoJoypad = (value & NMITIMEN_AUTO_JOYPAD) != 0;
+			break;
+		}
+
 		case MDMAEN :
 			m_dmaPending = value;
 			break;
@@ -469,7 +544,7 @@ void Bus::writeCpuRegister(U32 address, U8 value) {
 			m_fastRom = (value & MEMSEL_FASTROM) != 0;
 			break;
 
-		default : // TODO: $4200-$420C NMI/IRQ enable, multiply and divide, HDMA start
+		default : // TODO: $4201-$420C multiply and divide, H/V IRQ, HDMA start
 			break;
 		}
 

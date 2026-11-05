@@ -85,6 +85,7 @@ public:
 	// System mode only
 	U64  masterCycles() const { return m_masterCycles; }
 	void advanceClock(U32 cycles);
+	bool takeNmi();
 
 	U8   dmaRead(U32 address, bool valid);
 	void dmaWrite(U32 address, U8 value, bool valid);
@@ -127,8 +128,12 @@ private:
 
 	// The system's only clock, it moves when the bus is used
 	U64  m_masterCycles {};
-	bool m_fastRom {}; // $420D bit 0
-	bool m_nmiFlag {}; // $4210 bit 7
+	bool m_autoJoypad {}; // $4200 bit 0
+	bool m_nmiEnable {};  // $4200 bit 7
+	bool m_nmiFlag {};    // $4210 bit 7
+	bool m_nmiPending {}; // the CPU takes it before the next instruction
+	bool m_fastRom {};    // $420D bit 0
+	U64  m_joypadBusyUntil {};
 
 	bool m_flagE {};
 	bool m_flagM {};

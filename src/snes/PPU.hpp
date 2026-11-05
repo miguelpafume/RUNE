@@ -44,6 +44,19 @@ private:
 		bool onMainScreen {};
 	};
 
+	// Background in a video mode
+	struct LayerFormat {
+		U8 bitsPerPixel {}; // 0 means the mode doesn't have this layer
+		U8 lowPriority {};
+		U8 highPriority {}; // tiles with bit 13 of the map entry on
+	};
+
+	// One pixel of the line being drawn. Priority 0 and color 0 are the backdrop
+	struct LinePixel {
+		U8 priority {};
+		U8 color {}; // CGRAM index
+	};
+
 	U32 m_hClock {}; // master cycles since the line started
 	U32 m_scanline {};
 	U64 m_frames {};
@@ -54,9 +67,10 @@ private:
 	std::vector<U16> m_vram = std::vector<U16>(VRAM_WORDS);
 	std::vector<U16> m_cgram = std::vector<U16>(CGRAM_COLORS);
 
-	bool m_forcedBlank = true; // $2100 bit 7
 	U8   m_brightness {};      // $2100 bits 0-3
+	bool m_forcedBlank = true; // $2100 bit 7
 	U8   m_bgMode {};          // $2105 bits 0-2
+	bool m_bg3OnTop {};        // $2105 bit 3
 
 	std::array<Background, 4> m_backgrounds {};
 
@@ -75,6 +89,8 @@ private:
 	U8   m_cgramLatch {};
 	U8   m_ppu2LastRead {};
 
+	std::array<LinePixel, VIDEO_WIDTH> m_line {};
+
 	std::vector<U8> m_framebuffer = std::vector<U8>(std::size_t {VIDEO_WIDTH} * VIDEO_HEIGHT * 4); // RGBA
 
 	// While the PPU draws, the VRAM is all its own
@@ -83,8 +99,11 @@ private:
 	U16  readVram() const;
 	void stepVramAddress();
 
-	void renderLine();
-	U8   backgroundPixel(const Background& background, U32 hPosition, U32 vPosition) const;
+	const LayerFormat& layerFormat(U32 number) const;
+
+	void      renderLine();
+	void      renderBackground(U32 number);
+	LinePixel backgroundPixel(U32 number, const LayerFormat& format, U32 hPosition, U32 vPosition) const;
 };
 
 } // namespace SNES

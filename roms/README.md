@@ -7,12 +7,35 @@ The `.sfc` files stay out of git, so download them into this folder (no subfolde
 |---|---|---|---|---|
 | `CPUADC.sfc` | RESET up to the wait loop | [PeterLemon/SNES](https://github.com/PeterLemon/SNES), `CPUTest/CPU/ADC/` | `350b394` | `d6c4f5a284ce7842b8a3944b2bc51c8cde2f5932305f9b561334f4b7f49b5b4c` |
 | `PlayNoise.sfc` | APU boot handshake | [PeterLemon/SNES](https://github.com/PeterLemon/SNES), `SPC700/PlayNoise/` | `350b394` | `ae0841adaf3785a54c74852e9e0d8b7ac0bdfef5049f79e305dbeb137a8ff347` |
+| `CPUBIT.sfc` | Another CPU test screen, BIT and TSB | [PeterLemon/SNES](https://github.com/PeterLemon/SNES), `CPUTest/CPU/BIT/` | `350b394` | `fdfc621bcd1f9dfcc0800b331d540af69ca70dd7e075632b144b46d9583fa15e` |
+| `BANKWRAM.sfc` | Code running from WRAM banks | [PeterLemon/SNES](https://github.com/PeterLemon/SNES), `BANK/WRAM/` | `350b394` | `6ee3c92304298e5b6b083f1309285d5b8a75ad4287220ba16d1eb7df01167b06` |
+| `HelloWorld.sfc` | Text on BG1 | [PeterLemon/SNES](https://github.com/PeterLemon/SNES), `HelloWorld/` | `350b394` | `63ed338621788ad4ab856bb782e16044193882b7840370b500c8359a41fb87ef` |
+| `8x8BG1Map2BPP32x328PAL.sfc` | Picture on BG1, mode 0 with 8 palettes | [PeterLemon/SNES](https://github.com/PeterLemon/SNES), `PPU/BGMAP/8x8/2BPP/8x8BG1Map2BPP32x328PAL/` | `350b394` | `66083b119131d4cd7b3c41301750342152d2c3a3cfce103de074a0ae53330146` |
+| `cputest-basic.sfc` | Second opinion on the CPU, 1107 tests | [gilyon/snes-tests](https://github.com/gilyon/snes-tests), release `v1.4`, `cputest/` | `5ecdf55` | `d479bde706b9e16d76c0dfe98e2b2d3f5348f9dcb911e6a36b898f4201fc98bb` |
+| `SNES_04.sfc` | Mode 1 with three layers and priority bits | [nesdoug/SNES_04](https://github.com/nesdoug/SNES_04) | `9cb5b5b` | `6b2a9db603dd8c9654d82a86317d230ed4cae78f0f6c2387bfaf7e0fbe6b51b7` |
+| `SNES_4B.sfc` | The same screen with BG3 on top, `$2105` bit 3 | [nesdoug/SNES_04](https://github.com/nesdoug/SNES_04) | `9cb5b5b` | `621056282383671c9fd02f0a9051a65b79a62309031469f2f851fff8dd18516c` |
+| `SNES_05.sfc` | Sprites | [nesdoug/SNES_05](https://github.com/nesdoug/SNES_05) | `69bb3df` | `b5dd5d3a31a180a66ff6e660d61872c35c40f2676da56119cb7c49a6dd29f76a` |
+| `SNES_06.sfc` | Controller reads moving a sprite | [nesdoug/SNES_06](https://github.com/nesdoug/SNES_06) | `844ae00` | `a586bbae524513f21285ed74ab8e5585ccea6aed6bee50895969a18c05a08f0e` |
+| `SNES_07.sfc` | Pong clone, the first game target | [nesdoug/SNES_07](https://github.com/nesdoug/SNES_07) | `1016a0a` | `749ff9ddb4c57bb4d86b54ee7283e68bb572c2219c6c4e8180984f1ccaf8ab2b` |
 
-The PeterLemon/SNES repository declares no license, so these files are used locally and not
-redistributed here.
+The PeterLemon/SNES repository declares no license, so its files are used locally and not
+redistributed here. gilyon/snes-tests and the nesdoug/SNES_* repositories are MIT licensed.
 
 ```sh
 S=350b394e86ec5d62f600b5cbf64cdce3721bb6ef
 curl -fLO https://raw.githubusercontent.com/PeterLemon/SNES/$S/CPUTest/CPU/ADC/CPUADC.sfc
 curl -fLO https://raw.githubusercontent.com/PeterLemon/SNES/$S/SPC700/PlayNoise/PlayNoise.sfc
+curl -fLO https://raw.githubusercontent.com/PeterLemon/SNES/$S/CPUTest/CPU/BIT/CPUBIT.sfc
+curl -fLO https://raw.githubusercontent.com/PeterLemon/SNES/$S/BANK/WRAM/BANKWRAM.sfc
+curl -fLO https://raw.githubusercontent.com/PeterLemon/SNES/$S/HelloWorld/HelloWorld.sfc
+curl -fLO https://raw.githubusercontent.com/PeterLemon/SNES/$S/PPU/BGMAP/8x8/2BPP/8x8BG1Map2BPP32x328PAL/8x8BG1Map2BPP32x328PAL.sfc
+curl -fLO https://github.com/gilyon/snes-tests/releases/download/v1.4/snes-tests.zip
+unzip -j snes-tests.zip cputest/cputest-basic.sfc
+rm snes-tests.zip
+N=https://raw.githubusercontent.com/nesdoug
+curl -fLO $N/SNES_04/9cb5b5b5f7fcec98e272f0a9494f9031a30491c5/SNES_04.sfc
+curl -fLO $N/SNES_04/9cb5b5b5f7fcec98e272f0a9494f9031a30491c5/SNES_4B.sfc
+curl -fLO $N/SNES_05/69bb3dff2c6549fc484bfb6a6c95d15033a3940a/SNES_05.sfc
+curl -fLO $N/SNES_06/844ae002eef857396b43ece3ddee93d22571f27c/SNES_06.sfc
+curl -fLO $N/SNES_07/1016a0a3474e783290c5b0828428a0afe4706ce5/SNES_07.sfc
 ```

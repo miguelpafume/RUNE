@@ -588,6 +588,8 @@ private:
 	template <U16 NATIVE_VECTOR, U16 EMULATION_VECTOR>
 	void softwareInterrupt();
 
+	void hardwareInterrupt(U16 nativeVector, U16 emulationVector);
+
 	// MVN (STEP +1) and MVP (STEP -1)
 	template <bool X8, int STEP>
 	void blockMove();

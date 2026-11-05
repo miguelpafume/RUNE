@@ -40,6 +40,8 @@ constexpr U16 RDCGRAM = 0x213B;
 constexpr U8 INIDISP_FORCED_BLANK = 0x80;
 constexpr U8 INIDISP_BRIGHTNESS_MASK = 0x0F;
 
+constexpr U8 BGMODE_BG3_ON_TOP = 0x08;
+
 constexpr U8 VMAIN_INCREMENT_ON_HIGH = 0x80;
 
 constexpr U16 VRAM_ADDRESS_MASK = 0x7FFF;
@@ -48,11 +50,12 @@ constexpr U16 SCROLL_MASK = 0x3FF;
 // Bits of one tilemap entry
 constexpr U16 MAP_FLIP_Y = 0x8000;
 constexpr U16 MAP_FLIP_X = 0x4000;
+constexpr U16 MAP_PRIORITY = 0x2000;
 constexpr U16 MAP_TILE_MASK = 0x03FF;
 
 constexpr U32 MAX_BRIGHTNESS = 15;
 
-// Where in the line we draw it, same as bsnes. A write after this only shows on the next line
+// Same moment as the fast PPU of bsnes. A write after this only shows on the next line
 constexpr U32 RENDER_POSITION = 512;
 
 // How many words the address moves per access, $2115 bits 0-1
@@ -136,8 +139,9 @@ void PPU::writeRegister(U16 address, U8 value) {
 		m_brightness = value & INIDISP_BRIGHTNESS_MASK;
 		break;
 
-	case BGMODE : // TODO: bit 3, BG3 priority in mode 1
+	case BGMODE :
 		m_bgMode = value & 0x07;
+		m_bg3OnTop = (value & BGMODE_BG3_ON_TOP) != 0;
 
 		for (U32 number = 0; number < m_backgrounds.size(); number++) {
 			m_backgrounds[number].bigTiles = (value & (0x10u << number)) != 0;
@@ -285,17 +289,54 @@ static U8 outputChannel(U32 channel, U32 brightness) {
 	return static_cast<U8>(level << 3 | level >> 2);
 }
 
+// The layers of each video mode
+// A higher priority covers a lower one, the numbers in between are for the sprites
+const PPU::LayerFormat& PPU::layerFormat(U32 number) const {
+	static constexpr std::array<LayerFormat, 4> MODE_0 {{
+	    {2, 8, 11},
+	    {2, 7, 10},
+	    {2, 2, 5},
+	    {2, 1, 4},
+	}};
+	static constexpr std::array<LayerFormat, 4> MODE_1 {{
+	    {4, 6, 9},
+	    {4, 5, 8},
+	    {2, 1, 3},
+	    {},
+	}};
+	static constexpr std::array<LayerFormat, 4> MODE_1_BG3_ON_TOP {{
+	    {4, 5, 8},
+	    {4, 4, 7},
+	    {2, 1, 10},
+	    {},
+	}};
+	static constexpr std::array<LayerFormat, 4> NO_LAYERS {};
+
+	switch (m_bgMode) {
+	case 0 :
+		return MODE_0[number];
+
+	case 1 :
+		return m_bg3OnTop ? MODE_1_BG3_ON_TOP[number] : MODE_1[number];
+
+	default : // TODO: modes 2-7
+		return NO_LAYERS[number];
+	}
+}
+
 void PPU::renderLine() {
-	const Background& bg1 = m_backgrounds[0];
-	const bool        showBg1 = m_bgMode == 0 && bg1.onMainScreen; // TODO: the other layers and modes
+	m_line.fill({});
+
+	for (U32 number = 0; number < m_backgrounds.size(); number++) {
+		renderBackground(number);
+	}
+
+	const U32 brightness = m_forcedBlank ? 0 : m_brightness;
 
 	U8* pixel = &m_framebuffer[std::size_t {m_scanline - 1} * VIDEO_WIDTH * 4];
 
-	for (U32 x = 0; x < VIDEO_WIDTH; x++) {
-		// Index 0 is the backdrop, it shows wherever no layer has a pixel
-		const U8  index = showBg1 ? backgroundPixel(bg1, x + bg1.hScroll, m_scanline + bg1.vScroll) : U8 {0};
-		const U16 color = m_cgram[index];
-		const U32 brightness = m_forcedBlank ? 0 : m_brightness;
+	for (const LinePixel& linePixel : m_line) {
+		const U16 color = m_cgram[linePixel.color];
 
 		pixel[0] = outputChannel(color & 0x1F, brightness);
 		pixel[1] = outputChannel((color >> 5) & 0x1F, brightness);
@@ -305,9 +346,28 @@ void PPU::renderLine() {
 	}
 }
 
-// Which CGRAM color this pixel of the background uses, 0 if the pixel is transparent
-// Tiles here use 2 bits per pixel (2bpp), so each pixel picks one of 4 colors
-U8 PPU::backgroundPixel(const Background& background, U32 hPosition, U32 vPosition) const {
+void PPU::renderBackground(U32 number) {
+	const Background&  background = m_backgrounds[number];
+	const LayerFormat& format = layerFormat(number);
+
+	if (!background.onMainScreen || format.bitsPerPixel == 0) {
+		return;
+	}
+
+	for (U32 x = 0; x < VIDEO_WIDTH; x++) {
+		const LinePixel pixel = backgroundPixel(number, format, x + background.hScroll, m_scanline + background.vScroll);
+
+		// A transparent pixel has priority 0, so it never wins
+		if (pixel.priority > m_line[x].priority) {
+			m_line[x] = pixel;
+		}
+	}
+}
+
+// The priority and the CGRAM color of one pixel of a background
+PPU::LinePixel PPU::backgroundPixel(U32 number, const LayerFormat& format, U32 hPosition, U32 vPosition) const {
+	const Background& background = m_backgrounds[number];
+
 	const U32 tileShift = background.bigTiles ? 4 : 3;
 	const U32 mapX = hPosition >> tileShift;
 	const U32 mapY = vPosition >> tileShift;
@@ -343,17 +403,30 @@ U8 PPU::backgroundPixel(const Background& background, U32 hPosition, U32 vPositi
 	const U32 row = flipY ? 7 - (vPosition & 0x07) : vPosition & 0x07;
 	const U32 bit = flipX ? hPosition & 0x07 : 7 - (hPosition & 0x07);
 
-	// A tile has one word per row. The low byte holds bit 0 of each pixel's color, the high byte holds bit 1
-	const U16 planes = m_vram[(background.tileAddress + ((tile & MAP_TILE_MASK) << 3) + row) & VRAM_ADDRESS_MASK];
-	const U32 color = ((planes >> bit) & 0x01) | (((planes >> (bit + 8)) & 0x01) << 1);
+	// 2 bits take 8 words per tile, 4 bits take 16
+	const U32 rowAddress = background.tileAddress + (tile & MAP_TILE_MASK) * format.bitsPerPixel * 4 + row;
 
-	if (color == 0) {
-		return 0;
+	U32 color = 0;
+
+	// Each word holds 2 bits of each pixel of the row. With 4 bits, the other two come 8 words later
+	for (U32 pair = 0; pair < format.bitsPerPixel / 2u; pair++) {
+		const U16 planes = m_vram[(rowAddress + pair * 8) & VRAM_ADDRESS_MASK];
+
+		color |= (((planes >> bit) & 0x01) | (((planes >> (bit + 8)) & 0x01) << 1)) << (pair * 2);
 	}
 
+	if (color == 0) {
+		return {};
+	}
+
+	// In mode 0 each background has its own 32 colors
+	const U32 base = m_bgMode == 0 ? number << 5 : 0;
 	const U32 palette = (entry >> 10) & 0x07;
 
-	return static_cast<U8>(palette << 2 | color);
+	return {
+	    (entry & MAP_PRIORITY) ? format.highPriority : format.lowPriority,
+	    static_cast<U8>(base + (palette << format.bitsPerPixel) + color)
+	};
 }
 
 } // namespace SNES

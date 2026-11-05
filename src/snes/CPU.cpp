@@ -61,8 +61,20 @@ void CPU::reset() {
 }
 
 void CPU::step() {
-	// WAI/STP: the clock keeps going but nothing is fetched
-	if (m_stopped || m_waiting) {
+	if (m_stopped) {
+		m_bus.haltedCycle();
+		return;
+	}
+
+	// The NMI waits for the current instruction to finish
+	if (m_bus.takeNmi()) {
+		m_waiting = false;
+		hardwareInterrupt(VECTOR_NATIVE_NMI, VECTOR_EMULATION_NMI);
+		return;
+	}
+
+	// WAI: the clock keeps going but nothing is fetched
+	if (m_waiting) {
 		m_bus.haltedCycle();
 		return;
 	}
@@ -79,6 +91,32 @@ void CPU::step() {
 	// M and X choose the table, so each handler already knows its widths when compiled
 	const std::size_t table = (flagM ? 2 : 0) | (flagX ? 1 : 0);
 	(this->*TABLES[table][opcode])();
+}
+
+// Like BRK, but the byte at PC is read and dropped, so that instruction still runs after the handler
+void CPU::hardwareInterrupt(U16 nativeVector, U16 emulationVector) {
+	read(programAddress());
+	idleImplied();
+
+	if (!m_registers.E) {
+		push(m_registers.PB);
+	}
+
+	push(static_cast<U8>(m_registers.PC >> 8));
+	push(static_cast<U8>(m_registers.PC));
+
+	// In emulation bit 4 goes out clear, so the handler can tell this from BRK
+	push(m_registers.E ? static_cast<U8>(m_registers.P & ~FLAG_X) : m_registers.P);
+
+	setFlag(FLAG_I, true);
+	setFlag(FLAG_D, false);
+
+	const U16 vector = m_registers.E ? emulationVector : nativeVector;
+	const U8  low = m_bus.fetchVector(vector);
+	const U8  high = m_bus.fetchVector(vector + 1);
+
+	m_registers.PC = static_cast<U16>(high << 8 | low);
+	m_registers.PB = 0;
 }
 
 // Used by the tests to load a state, emulation rules still get applied
