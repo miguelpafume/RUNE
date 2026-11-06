@@ -12,15 +12,15 @@
 namespace SNES {
 
 // The 65816 uses 24 address lines, so anything above bank $FF wraps
-constexpr U32         ADDRESS_MASK = 0x00FFFFFF;
-constexpr std::size_t TEST_MEMORY_SIZE = 0x00FFFFFF + 1; // 16 MB, flat
+constexpr U32         ADDRESS_MASK = 0xFFFFFF;
+constexpr std::size_t TEST_MEMORY_SIZE = 0xFFFFFF + 1; // 16 MB, flat
 
 constexpr std::size_t EXPECTED_DIRTY_PER_CASE = 16;
 constexpr std::size_t EXPECTED_CYCLES_PER_CASE = 16;
 
 constexpr U32 BLOCK_OFFSET_MASK = Bus::BLOCK_SIZE - 1;
 
-constexpr U32 WRAM_START = 0x7E0000;       // banks $7E-$7F hold all of it
+constexpr U32 WRAM_START = 0x7E0000;       // Banks $7E-$7F
 constexpr U32 WRAM_MIRROR_SIZE = 0x2000;   // the first 8 KiB also show up at $0000-$1FFF
 constexpr U32 WRAM_ADDRESS_MASK = 0x1FFFF; // the port address has 17 bits
 
@@ -49,6 +49,7 @@ constexpr U16 DMA_FIRST = 0x4300; // 8 channels x 16 bytes
 constexpr U16 DMA_LAST = 0x437F;
 constexpr U16 NMITIMEN = 0x4200;
 constexpr U16 MDMAEN = 0x420B;
+constexpr U16 HDMAEN = 0x420C;
 constexpr U16 MEMSEL = 0x420D;
 constexpr U16 RDNMI = 0x4210;
 constexpr U16 HVBJOY = 0x4212;
@@ -83,6 +84,12 @@ constexpr U32 JOYPAD_START_FIRST = 130;
 constexpr U32 JOYPAD_START_LAST = 384;
 
 constexpr U32 CYCLES_INTERNAL = CYCLES_FAST; // cycles that don't touch memory take 6 too
+
+// HDMA starts the frame early in line 0, then copies late in each visible line, in H-Blank
+constexpr U32 HDMA_SETUP_POSITION = 12;
+constexpr U32 HDMA_POSITION = 1104;
+constexpr U32 DMA_CLOCK_CYCLES = 8;
+constexpr U32 NO_HDMA = std::numeric_limits<U32>::max();
 
 // The CPU stops for this once per line, while the WRAM refreshes
 constexpr U32 DRAM_REFRESH_POSITION = 538;
@@ -129,10 +136,18 @@ void Bus::advanceClock(U32 cycles) {
 		}
 	}
 
+	const U32 hClock = m_ppu->hClock();
+
+	// H went back, so a new line started
+	if (hClock < hClockBefore)
+		startHdmaLine(hClock);
+
+	if (hClock >= m_hdmaPosition)
+		hdmaEdge();
+
 	// Accesses cost 6, 8 or 12, so H can jump over the exact position
-	if (hClockBefore < DRAM_REFRESH_POSITION && m_ppu->hClock() >= DRAM_REFRESH_POSITION) {
+	if (hClockBefore < DRAM_REFRESH_POSITION && hClock >= DRAM_REFRESH_POSITION)
 		advanceClock(DRAM_REFRESH_CYCLES);
-	}
 }
 
 // One step of the auto joypad read, the same state machine as bsnes
@@ -197,9 +212,55 @@ bool Bus::takeNmi() {
 	return pending;
 }
 
-// One CPU cycle. If it comes right after a write to $420B, the DMA goes first
+void Bus::startHdmaLine(U32 hClock) {
+	const U32 line = m_ppu->scanline();
+
+	if (line == 0) {
+		// The setup moves with the 8-cycle DMA clock, as it was when the line started
+		const U64 lineStart = m_masterCycles - hClock;
+
+		m_hdmaPosition = HDMA_SETUP_POSITION + static_cast<U32>(lineStart % DMA_CLOCK_CYCLES);
+		m_hdmaSetupDone = false;
+	} else if (line < VBLANK_START_LINE) {
+		m_hdmaPosition = HDMA_POSITION;
+	} else {
+		m_hdmaPosition = NO_HDMA;
+	}
+}
+
+// H reached the setup on line 0, or the H-Blank of a visible line
+void Bus::hdmaEdge() {
+	if (!m_hdmaSetupDone) {
+		m_hdmaSetupDone = true;
+		m_hdmaPosition = HDMA_POSITION;
+		m_dma->hdmaReset();
+
+		if (m_dma->hdmaEnabled()) {
+			m_hdmaRequest = HdmaRequest::Setup;
+		}
+
+		return;
+	}
+
+	m_hdmaPosition = NO_HDMA;
+
+	if (m_dma->hdmaActive()) {
+		m_hdmaRequest = HdmaRequest::Transfer;
+	}
+}
+
+// Taking it also clears it, like the NMI
+Bus::HdmaRequest Bus::takeHdma() {
+	const HdmaRequest request = m_hdmaRequest;
+
+	m_hdmaRequest = HdmaRequest::None;
+
+	return request;
+}
+
+// One CPU cycle. A DMA written to $420B, or an HDMA that came due, goes first
 void Bus::chargeAccess(U32 cycles) {
-	if (m_dmaPending != 0) {
+	if (m_dmaPending != 0 || m_hdmaRequest != HdmaRequest::None) {
 		const U8 channels = m_dmaPending;
 
 		m_dmaPending = 0;
@@ -627,11 +688,15 @@ void Bus::writeCpuRegister(U32 address, U8 value) {
 			m_dmaPending = value;
 			break;
 
+		case HDMAEN :
+			m_dma->setHdmaEnable(value);
+			break;
+
 		case MEMSEL : // ROM in banks $80-$FF runs at 6 cycles when set
 			m_fastRom = (value & MEMSEL_FASTROM) != 0;
 			break;
 
-		default : // TODO: $4201-$420C multiply and divide, H/V IRQ, HDMA start
+		default : // TODO: $4201-$420A multiply and divide, H/V IRQ
 			break;
 		}
 

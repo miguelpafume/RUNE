@@ -47,6 +47,13 @@ public:
 		bool              memoryLock {};
 	};
 
+	// What the DMA controller has to do for HDMA at the next CPU cycle
+	enum class HdmaRequest : U8 {
+		None,
+		Setup,   // start of the frame
+		Transfer // H-Blank of a visible line
+	};
+
 	enum class BlockType : U8 {
 		OpenBus,
 		ExternalRegisters, // $2000-$3FFF: PPU, APU and WRAM port, outside the CPU
@@ -88,6 +95,8 @@ public:
 	U64  masterCycles() const { return m_masterCycles; }
 	void advanceClock(U32 cycles);
 	bool takeNmi();
+
+	HdmaRequest takeHdma();
 
 	U8   dmaRead(U32 address, bool valid);
 	void dmaWrite(U32 address, U8 value, bool valid);
@@ -161,10 +170,17 @@ private:
 
 	U8 m_dmaPending {}; // channels written to $420B
 
+	HdmaRequest m_hdmaRequest {};
+	U32         m_hdmaPosition = std::numeric_limits<U32>::max(); // H of the next HDMA step in this line
+	bool        m_hdmaSetupDone = true;
+
 	std::size_t m_cycleBudget = std::numeric_limits<std::size_t>::max();
 
 	void joypadEdge();
 	void latchPorts();
+
+	void startHdmaLine(U32 hClock);
+	void hdmaEdge();
 
 	void spendCycle();
 	void chargeAccess(U32 cycles);

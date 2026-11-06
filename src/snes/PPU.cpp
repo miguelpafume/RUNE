@@ -63,8 +63,6 @@ constexpr U16 MAP_FLIP_X = 0x4000;
 constexpr U16 MAP_PRIORITY = 0x2000;
 constexpr U16 MAP_TILE_MASK = 0x03FF;
 
-constexpr U32 MAX_BRIGHTNESS = 15;
-
 constexpr U16 OAM_ADDRESS_MASK = 0x3FF;
 constexpr U16 OAM_HIGH_TABLE = 0x200;
 
@@ -358,14 +356,14 @@ U16 PPU::readVram() const { return canAccessVram() ? m_vram[vramIndex()] : U16 {
 
 void PPU::stepVramAddress() { m_vramAddress = (m_vramAddress + m_vramIncrement) & VRAM_ADDRESS_MASK; }
 
-// Turns one color channel from CGRAM into one framebuffer byte
-// Brightness comes first: 15 keeps the channel as it is, 0 makes it black
-// Then 5 bits become 8. Shifting alone would turn 31 into 248,
-// so the top 3 bits also fill the empty low bits, and 31 becomes 255
+// Turns one color channel from CGRAM into one framebuffer byte, like the accurate PPU of bsnes
+// The 5 bits are repeated to fill 16, so 31 becomes $FFFF, then brightness scales by (b + 1) / 16
+// Brightness 0 still leaves a quarter of level 1, only forced blank is black
 static U8 outputChannel(U32 channel, U32 brightness) {
-	const U32 level = channel * brightness / MAX_BRIGHTNESS;
+	const U32 wide = channel << 11 | channel << 6 | channel << 1 | channel >> 4;
+	const U32 level = brightness == 0 ? wide / 64 : wide * (brightness + 1) / 16;
 
-	return static_cast<U8>(level << 3 | level >> 2);
+	return static_cast<U8>(level >> 8);
 }
 
 // The layers of each video mode
@@ -430,16 +428,14 @@ void PPU::renderLine() {
 
 	renderSprites();
 
-	const U32 brightness = m_forcedBlank ? 0 : m_brightness;
-
 	U8* pixel = &m_framebuffer[std::size_t {m_scanline - 1} * VIDEO_WIDTH * 4];
 
 	for (const LinePixel& linePixel : m_line) {
-		const U16 color = m_cgram[linePixel.color];
+		const U16 color = m_forcedBlank ? 0 : m_cgram[linePixel.color];
 
-		pixel[0] = outputChannel(color & 0x1F, brightness);
-		pixel[1] = outputChannel((color >> 5) & 0x1F, brightness);
-		pixel[2] = outputChannel((color >> 10) & 0x1F, brightness);
+		pixel[0] = outputChannel(color & 0x1F, m_brightness);
+		pixel[1] = outputChannel((color >> 5) & 0x1F, m_brightness);
+		pixel[2] = outputChannel((color >> 10) & 0x1F, m_brightness);
 		pixel[3] = 0xFF;
 		pixel += 4;
 	}

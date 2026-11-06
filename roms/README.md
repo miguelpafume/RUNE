@@ -17,7 +17,11 @@ The `.sfc` files stay out of git, so download them into this folder (no subfolde
 | `SNES_05.sfc` | Sprites | [nesdoug/SNES_05](https://github.com/nesdoug/SNES_05) | `69bb3df` | `b5dd5d3a31a180a66ff6e660d61872c35c40f2676da56119cb7c49a6dd29f76a` |
 | `SNES_06.sfc` | Controller reads moving a sprite | [nesdoug/SNES_06](https://github.com/nesdoug/SNES_06) | `844ae00` | `a586bbae524513f21285ed74ab8e5585ccea6aed6bee50895969a18c05a08f0e` |
 | `SNES_07.sfc` | Pong clone, the first game target | [nesdoug/SNES_07](https://github.com/nesdoug/SNES_07) | `1016a0a` | `749ff9ddb4c57bb4d86b54ee7283e68bb572c2219c6c4e8180984f1ccaf8ab2b` |
+| `RedSpaceHDMA.sfc` | HDMA changing the backdrop color on each line | [PeterLemon/SNES](https://github.com/PeterLemon/SNES), `PPU/HDMA/RedSpaceHDMA/` | `350b394` | `f59bc2cc89b22cad7308fe65f5d9fee1025311c84a9f809e14ebf96ab9a4c4de` |
+| `RedSpaceIndirectHDMA.sfc` | The same gradient through indirect HDMA | [PeterLemon/SNES](https://github.com/PeterLemon/SNES), `PPU/HDMA/RedSpaceIndirectHDMA/` | `350b394` | `bfc85c6c05399512e33c4ec5393e90eba6a4465bdcdb6c3f2624d2f7c2cf90ff` |
+| `RedSpace9BitHDMA.sfc` | Two HDMA channels, color and brightness on each line | [PeterLemon/SNES](https://github.com/PeterLemon/SNES), `PPU/HDMA/RedSpace9BitHDMA/` | `350b394` | `ad06e07d45dc82d744d6d9fbe0a9b7897f3386fb475168c163824ee0997c1e44` |
 | `SNES_09.sfc` | A sprite moving over a background map, flipped sideways | [nesdoug/SNES_09](https://github.com/nesdoug/SNES_09) | `50257bd` | `60bfd8bb488a29738b5f64a51210d7159a9d47c2a11bac924c2237d29cf65044` |
+| `SNES_11.sfc` | HDMA effects switched with A, B, X or Y: color gradient, wavy scroll | [nesdoug/SNES_11](https://github.com/nesdoug/SNES_11) | `d25ba88` | `a61036d60fc891735c0f052b389c62bb9975891cb381c3a02d03f54df07be483` |
 | `ctrltest.sfc` | Controller bits read by hand through `$4016` and `$4017` | [bbbradsmith/SNES_stuff](https://github.com/bbbradsmith/SNES_stuff), `ctrltest/` | `3246b58` | `48432413b80863ed884ba76a2892f6eda2277ea5349e8ef13347f70b9aa98983` |
 | `ctrltest_auto.sfc` | The same bits from the automatic read, `$4218`-`$421F` | [bbbradsmith/SNES_stuff](https://github.com/bbbradsmith/SNES_stuff), `ctrltest/` | `3246b58` | `ae660b7c49941901b48e25837793ab946befe00de5d3038d404cfdee77dfc82f` |
 | `ctrltest_simple.sfc` | Each button of both controllers, from the automatic read | [bbbradsmith/SNES_stuff](https://github.com/bbbradsmith/SNES_stuff), `ctrltest/` | `3246b58` | `445afc4c735790e272d5312f3520570013c999534740b8dd7c729c2b066d8e7c` |
@@ -33,6 +37,9 @@ curl -fLO https://raw.githubusercontent.com/PeterLemon/SNES/$S/CPUTest/CPU/BIT/C
 curl -fLO https://raw.githubusercontent.com/PeterLemon/SNES/$S/BANK/WRAM/BANKWRAM.sfc
 curl -fLO https://raw.githubusercontent.com/PeterLemon/SNES/$S/HelloWorld/HelloWorld.sfc
 curl -fLO https://raw.githubusercontent.com/PeterLemon/SNES/$S/PPU/BGMAP/8x8/2BPP/8x8BG1Map2BPP32x328PAL/8x8BG1Map2BPP32x328PAL.sfc
+curl -fLO https://raw.githubusercontent.com/PeterLemon/SNES/$S/PPU/HDMA/RedSpaceHDMA/RedSpaceHDMA.sfc
+curl -fLO https://raw.githubusercontent.com/PeterLemon/SNES/$S/PPU/HDMA/RedSpaceIndirectHDMA/RedSpaceIndirectHDMA.sfc
+curl -fLO https://raw.githubusercontent.com/PeterLemon/SNES/$S/PPU/HDMA/RedSpace9BitHDMA/RedSpace9BitHDMA.sfc
 curl -fLO https://github.com/gilyon/snes-tests/releases/download/v1.4/snes-tests.zip
 unzip -j snes-tests.zip cputest/cputest-basic.sfc
 rm snes-tests.zip
@@ -43,6 +50,7 @@ curl -fLO $N/SNES_05/69bb3dff2c6549fc484bfb6a6c95d15033a3940a/SNES_05.sfc
 curl -fLO $N/SNES_06/844ae002eef857396b43ece3ddee93d22571f27c/SNES_06.sfc
 curl -fLO $N/SNES_07/1016a0a3474e783290c5b0828428a0afe4706ce5/SNES_07.sfc
 curl -fLO $N/SNES_09/50257bd197ba5b3a3b1b3be6fcc3f741c5a72994/SNES_09.sfc
+curl -fLO $N/SNES_11/d25ba887f5f0542da77c6d44e04ac60524d0b959/SNES_11.sfc
 B=https://raw.githubusercontent.com/bbbradsmith/SNES_stuff/3246b5854c91a5a2f44d1569ead0aec0e211d930/ctrltest
 curl -fLO $B/ctrltest.sfc
 curl -fLO $B/ctrltest_auto.sfc
