@@ -1,10 +1,35 @@
 #include "SnesApp.hpp"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
-#include <iostream>
 #include <thread>
 #include <utility>
+
+namespace {
+
+struct KeyBinding {
+	int       key;
+	RUNE::U16 button;
+};
+
+// Keyboard keys for controller 1
+constexpr std::array KEY_BINDINGS {
+    KeyBinding {GLFW_KEY_UP, SNES::Gamepad::BUTTON_UP},
+    KeyBinding {GLFW_KEY_DOWN, SNES::Gamepad::BUTTON_DOWN},
+    KeyBinding {GLFW_KEY_LEFT, SNES::Gamepad::BUTTON_LEFT},
+    KeyBinding {GLFW_KEY_RIGHT, SNES::Gamepad::BUTTON_RIGHT},
+    KeyBinding {GLFW_KEY_X, SNES::Gamepad::BUTTON_A},
+    KeyBinding {GLFW_KEY_Z, SNES::Gamepad::BUTTON_B},
+    KeyBinding {GLFW_KEY_S, SNES::Gamepad::BUTTON_X},
+    KeyBinding {GLFW_KEY_A, SNES::Gamepad::BUTTON_Y},
+    KeyBinding {GLFW_KEY_Q, SNES::Gamepad::BUTTON_L},
+    KeyBinding {GLFW_KEY_W, SNES::Gamepad::BUTTON_R},
+    KeyBinding {GLFW_KEY_ENTER, SNES::Gamepad::BUTTON_START},
+    KeyBinding {GLFW_KEY_RIGHT_SHIFT, SNES::Gamepad::BUTTON_SELECT},
+};
+
+} // namespace
 
 SnesApp::SnesApp(const std::string& romPath) {
 	loadPlane();
@@ -146,4 +171,15 @@ void SnesApp::updateAspect(float aspect) {
 	m_camera.setOrtohraphicProjection(m_left, m_right, m_top, m_bottom, -1.0f, 1.0f);
 }
 
-void SnesApp::pollInput() {}
+void SnesApp::pollInput() {
+	GLFWwindow* window = m_engine.getWindow().getGLFWWindow();
+	RUNE::U16   buttons = 0;
+
+	for (const KeyBinding& binding : KEY_BINDINGS) {
+		if (glfwGetKey(window, binding.key) == GLFW_PRESS) {
+			buttons = static_cast<RUNE::U16>(buttons | binding.button);
+		}
+	}
+
+	m_snes.setButtons(0, buttons);
+}

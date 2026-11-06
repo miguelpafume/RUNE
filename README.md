@@ -73,6 +73,8 @@ every test instrument used in this project is catalogued in
 | <kbd>Z</kbd> / <kbd>X</kbd> | B / A | <kbd>Enter</kbd> | Start |
 | <kbd>A</kbd> / <kbd>S</kbd> | Y / X | <kbd>RShift</kbd> | Select |
 
+The keyboard drives controller 1 only. Keys go by their position on a US layout.
+
 ## ROMs
 
 No commercial ROM is distributed with this repository. `roms/` holds test ROMs

@@ -11,6 +11,7 @@ add_library(snes_core STATIC
   src/snes/Bus.cpp
   src/snes/CPU.cpp
   src/snes/DMA.cpp
+  src/snes/Gamepad.cpp
   src/snes/PPU.cpp
   src/snes/APU.cpp
   src/snes/System.cpp

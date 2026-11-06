@@ -3,6 +3,7 @@
 #include "Cartridge.hpp"
 #include "Constants.hpp"
 #include "DMA.hpp"
+#include "Gamepad.hpp"
 #include "PPU.hpp"
 
 #include <cstddef>
@@ -40,8 +41,8 @@ constexpr U16 WMADDM = 0x2182;
 constexpr U16 WMADDH = 0x2183;
 
 // CPU registers
-constexpr U16 JOYPAD_FIRST = 0x4016; // old serial joypad ports
-constexpr U16 JOYPAD_LAST = 0x4017;
+constexpr U16 JOYSER0 = 0x4016; // serial joypad ports, read one bit at a time
+constexpr U16 JOYSER1 = 0x4017;
 constexpr U16 INTERNAL_FIRST = 0x4200; // NMI/IRQ, multiply and divide, auto joypad
 constexpr U16 INTERNAL_LAST = 0x421F;
 constexpr U16 DMA_FIRST = 0x4300; // 8 channels x 16 bytes
@@ -68,13 +69,18 @@ constexpr U8 HVBJOY_HBLANK = 0x40;
 constexpr U8 HVBJOY_JOYPAD_BUSY = 0x01;
 constexpr U8 HVBJOY_OPEN_BUS_MASK = 0x3E;
 
+constexpr U8 JOYSER0_LATCH = 0x01;
+constexpr U8 JOYSER0_OPEN_BUS_MASK = 0xFC;
+constexpr U8 JOYSER1_OPEN_BUS_MASK = 0xE0;
+constexpr U8 JOYSER1_GROUNDED = 0x1C; // these pins are tied to ground and read as 1
+
 // H-Blank starts at the end of one line and lasts into the next
 constexpr U32 HBLANK_START = 1096;
 constexpr U32 HBLANK_END = 2;
 
-// The console reads the controllers on its own at the start of V-Blank
-constexpr U32 JOYPAD_READ_POSITION = 130;
-constexpr U32 JOYPAD_READ_CYCLES = 4224;
+// The auto joypad read starts on an edge between H = 130 and H = 384 of the first V-Blank line
+constexpr U32 JOYPAD_START_FIRST = 130;
+constexpr U32 JOYPAD_START_LAST = 384;
 
 constexpr U32 CYCLES_INTERNAL = CYCLES_FAST; // cycles that don't touch memory take 6 too
 
@@ -99,6 +105,18 @@ void Bus::advanceClock(U32 cycles) {
 	const U32  hClockBefore = m_ppu->hClock();
 	const bool vBlankBefore = m_ppu->inVBlank();
 
+	// Stops on every 128-cycle edge on the way, where the auto joypad read takes a step
+	while (m_masterCycles + cycles >= m_nextJoypadEdge) {
+		const U32 step = static_cast<U32>(m_nextJoypadEdge - m_masterCycles);
+
+		m_masterCycles += step;
+		m_ppu->advance(step);
+		cycles -= step;
+		m_nextJoypadEdge += JOYPAD_STEP_CYCLES;
+
+		joypadEdge();
+	}
+
 	m_masterCycles += cycles;
 	m_ppu->advance(cycles);
 
@@ -111,14 +129,62 @@ void Bus::advanceClock(U32 cycles) {
 		}
 	}
 
-	if (m_autoJoypad && m_ppu->scanline() == VBLANK_START_LINE && hClockBefore < JOYPAD_READ_POSITION &&
-	    m_ppu->hClock() >= JOYPAD_READ_POSITION) {
-		m_joypadBusyUntil = m_masterCycles + JOYPAD_READ_CYCLES;
-	}
-
 	// Accesses cost 6, 8 or 12, so H can jump over the exact position
 	if (hClockBefore < DRAM_REFRESH_POSITION && m_ppu->hClock() >= DRAM_REFRESH_POSITION) {
 		advanceClock(DRAM_REFRESH_CYCLES);
+	}
+}
+
+// One step of the auto joypad read, the same state machine as bsnes
+void Bus::joypadEdge() {
+	const U32  hClock = m_ppu->hClock();
+	const bool startEdge = m_masterCycles % (2 * JOYPAD_STEP_CYCLES) == 0; // only every other edge can start it
+
+	if (m_ppu->scanline() == VBLANK_START_LINE && startEdge && hClock >= JOYPAD_START_FIRST && hClock <= JOYPAD_START_LAST) {
+		m_joypadStep = 0;
+	} else if (m_joypadStep >= JOYPAD_STEPS) {
+		return;
+	} else {
+		m_joypadStep++;
+	}
+
+	// Step 0 latches the controllers and clears the registers, step 1 lets the latch go
+	if (m_joypadStep == 0) {
+		m_autoJoypadLatch = m_autoJoypad;
+		latchPorts();
+
+		if (m_autoJoypad) {
+			m_joy = {};
+		}
+	}
+
+	if (m_joypadStep == 1) {
+		m_autoJoypadLatch = false;
+		latchPorts();
+	}
+
+	if (m_joypadStep != 1 && !m_autoJoypad) {
+		m_joypadStep = JOYPAD_STEPS;
+		return;
+	}
+
+	// One bit per pair of steps: read on the even step, shifted in on the odd one
+	if (m_joypadStep >= 2) {
+		for (std::size_t port = 0; port < m_ports.size(); port++) {
+			if ((m_joypadStep & 1) == 0) {
+				m_joypadBits[port] = m_ports[port]->data();
+			} else {
+				m_joy[port] = static_cast<U16>(m_joy[port] << 1 | (m_joypadBits[port] & 0x01));
+			}
+		}
+	}
+}
+
+void Bus::latchPorts() {
+	const bool high = m_cpuLatch || m_autoJoypadLatch;
+
+	for (Gamepad* gamepad : m_ports) {
+		gamepad->latch(high);
 	}
 }
 
@@ -463,9 +529,12 @@ void Bus::writeExternalRegister(U32 address, U8 value) {
 U8 Bus::readCpuRegister(U32 address) {
 	const U16 offset = address & 0xFFFF;
 
-	if (offset >= JOYPAD_FIRST && offset <= JOYPAD_LAST) {
-		// TODO: serial joypad, some bits come from open bus
-		return m_openBus;
+	if (offset == JOYSER0) {
+		return static_cast<U8>((m_openBus & JOYSER0_OPEN_BUS_MASK) | m_ports[0]->data());
+	}
+
+	if (offset == JOYSER1) {
+		return static_cast<U8>((m_openBus & JOYSER1_OPEN_BUS_MASK) | JOYSER1_GROUNDED | m_ports[1]->data());
 	}
 
 	if (offset >= INTERNAL_FIRST && offset <= INTERNAL_LAST) {
@@ -490,16 +559,23 @@ U8 Bus::readCpuRegister(U32 address) {
 				value |= HVBJOY_HBLANK;
 			}
 
-			if (m_masterCycles < m_joypadBusyUntil) {
+			if (m_autoJoypad && m_joypadStep < JOYPAD_STEPS) {
 				value |= HVBJOY_JOYPAD_BUSY;
 			}
 
 			return value;
 		}
 
-		// TODO: the real buttons, for now nobody is pressing anything
 		if (offset >= JOY_FIRST && offset <= JOY_LAST) {
-			return 0;
+			const U32 index = offset - JOY_FIRST;
+
+			if (index >= 2 * m_joy.size()) {
+				return 0;
+			}
+
+			const U16 joy = m_joy[index / 2];
+
+			return static_cast<U8>((index & 1) ? joy >> 8 : joy);
 		}
 
 		// TODO: $4211 and $4213-$4217 status and results
@@ -516,8 +592,10 @@ U8 Bus::readCpuRegister(U32 address) {
 void Bus::writeCpuRegister(U32 address, U8 value) {
 	const U16 offset = address & 0xFFFF;
 
-	if (offset >= JOYPAD_FIRST && offset <= JOYPAD_LAST) {
-		// TODO: joypad latch
+	// Writes to $4017 do nothing, $4016 bit 0 already reaches both ports
+	if (offset == JOYSER0) {
+		m_cpuLatch = (value & JOYSER0_LATCH) != 0;
+		latchPorts();
 		return;
 	}
 
@@ -533,6 +611,15 @@ void Bus::writeCpuRegister(U32 address, U8 value) {
 
 			m_nmiEnable = enable;
 			m_autoJoypad = (value & NMITIMEN_AUTO_JOYPAD) != 0;
+
+			// On step 0 the latch follows the new value. Turned off after step 1, the reading stops
+			if (m_joypadStep == 0) {
+				m_autoJoypadLatch = m_autoJoypad;
+				latchPorts();
+			} else if (!m_autoJoypad && m_joypadStep >= 2) {
+				m_joypadStep = JOYPAD_STEPS;
+			}
+
 			break;
 		}
 

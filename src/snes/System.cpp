@@ -13,6 +13,7 @@ System::System() {
 	m_bus.attachApu(m_apu);
 	m_bus.attachPpu(m_ppu);
 	m_bus.attachDma(m_dma);
+	m_bus.attachGamepads(m_gamepads[0], m_gamepads[1]);
 }
 
 void System::loadRom(const std::string& romPath) {
@@ -48,8 +49,12 @@ void System::printCartridge(const std::string& romPath) const {
 	          << std::format("SRAM:     {} KiB\n", header.sramSize / KIB)
 	          << std::format("Region:   {} (destination ${:02X})\n", isPal ? "PAL" : "NTSC", header.destination)
 	          << std::format("Version:  1.{}\n", header.version)
-	          << std::format("Checksum: ${:04X} computed, ${:04X} declared, complement ${:04X}\n", m_cartridge->computedChecksum(),
-	                         header.checksum, header.complement)
+	          << std::format(
+	                 "Checksum: ${:04X} computed, ${:04X} declared, complement ${:04X}\n",
+	                 m_cartridge->computedChecksum(),
+	                 header.checksum,
+	                 header.complement
+	             )
 	          << std::format("RESET:    $00:{:04X}\n", header.resetVector);
 
 	if (isPal) {
@@ -73,9 +78,21 @@ void System::runFrame() {
 std::string System::traceLine() const {
 	const CPU::Registers& registers = m_cpu.getRegisters();
 
-	return std::format("{:02X}{:04X} A:{:04X} X:{:04X} Y:{:04X} S:{:04X} D:{:04X} DB:{:02X} P:{:02X} V:{} H:{} MC:{}", registers.PB,
-	                   registers.PC, registers.A, registers.X, registers.Y, registers.S, registers.D, registers.DB, registers.P,
-	                   m_ppu.scanline(), m_ppu.hClock(), m_bus.masterCycles());
+	return std::format(
+	    "{:02X}{:04X} A:{:04X} X:{:04X} Y:{:04X} S:{:04X} D:{:04X} DB:{:02X} P:{:02X} V:{} H:{} MC:{}",
+	    registers.PB,
+	    registers.PC,
+	    registers.A,
+	    registers.X,
+	    registers.Y,
+	    registers.S,
+	    registers.D,
+	    registers.DB,
+	    registers.P,
+	    m_ppu.scanline(),
+	    m_ppu.hClock(),
+	    m_bus.masterCycles()
+	);
 }
 
 } // namespace SNES

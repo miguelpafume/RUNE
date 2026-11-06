@@ -18,6 +18,7 @@ using RUNE::U8;
 class APU;
 class Cartridge;
 class DMA;
+class Gamepad;
 class PPU;
 
 class Bus {
@@ -78,6 +79,7 @@ public:
 	void attachApu(APU& apu) { m_apu = &apu; }
 	void attachPpu(PPU& ppu) { m_ppu = &ppu; }
 	void attachDma(DMA& dma) { m_dma = &dma; }
+	void attachGamepads(Gamepad& port1, Gamepad& port2) { m_ports = {&port1, &port2}; }
 
 	// Read that doesn't change anything, used by the comparator and the viewers
 	U8 peek(U32 address) const;
@@ -133,7 +135,18 @@ private:
 	bool m_nmiFlag {};    // $4210 bit 7
 	bool m_nmiPending {}; // the CPU takes it before the next instruction
 	bool m_fastRom {};    // $420D bit 0
-	U64  m_joypadBusyUntil {};
+
+	// The console reads the controllers on its own, in 33 steps of 128 cycles
+	// Past the last step the read is idle
+	static constexpr U32 JOYPAD_STEPS = 33;
+	static constexpr U32 JOYPAD_STEP_CYCLES = 128;
+
+	U32                m_joypadStep = JOYPAD_STEPS;
+	U64                m_nextJoypadEdge = JOYPAD_STEP_CYCLES;
+	bool               m_cpuLatch {};        // $4016 bit 0
+	bool               m_autoJoypadLatch {}; // the auto read holds the same line
+	std::array<U8, 2>  m_joypadBits {};      // read on one step, shifted in on the next
+	std::array<U16, 2> m_joy {};             // $4218-$421B
 
 	bool m_flagE {};
 	bool m_flagM {};
@@ -144,9 +157,14 @@ private:
 	PPU*       m_ppu {};
 	DMA*       m_dma {};
 
+	std::array<Gamepad*, 2> m_ports {};
+
 	U8 m_dmaPending {}; // channels written to $420B
 
 	std::size_t m_cycleBudget = std::numeric_limits<std::size_t>::max();
+
+	void joypadEdge();
+	void latchPorts();
 
 	void spendCycle();
 	void chargeAccess(U32 cycles);
