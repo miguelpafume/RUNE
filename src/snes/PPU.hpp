@@ -34,7 +34,7 @@ public:
 	const std::vector<U8>&  framebuffer() const { return m_framebuffer; }
 
 private:
-	// $2105, $2107-$2114 and $212C
+	// $2105 and $2107-$2114
 	struct Background {
 		U16  mapAddress {};  // in words
 		U8   mapSize {};     // bit 0 doubles the width, bit 1 the height
@@ -42,7 +42,15 @@ private:
 		U16  hScroll {};
 		U16  vScroll {};
 		bool bigTiles {}; // 16x16
-		bool onMainScreen {};
+	};
+
+	// $2123-$2125 and $212A-$212B, one for each layer and one for color math
+	struct Window {
+		bool oneEnabled {};
+		bool oneInverted {};
+		bool twoEnabled {};
+		bool twoInverted {};
+		U8   logic {}; // OR, AND, XOR, XNOR
 	};
 
 	// Background in a video mode
@@ -52,10 +60,11 @@ private:
 		U8 highPriority {}; // tiles with bit 13 of the map entry on
 	};
 
-	// One pixel of the line being drawn. Priority 0 and color 0 are the backdrop
+	// One pixel of the main or the sub screen. Priority 0 is the backdrop
 	struct LinePixel {
-		U8 priority {};
-		U8 color {}; // CGRAM index
+		U8  priority {};
+		U8  layer {}; // decides if color math applies
+		U16 color {}; // BGR, 5 bits each
 	};
 
 	// One sprite, put back together from the two OAM tables
@@ -91,6 +100,32 @@ private:
 
 	std::array<Background, 4> m_backgrounds {};
 
+	// One bit per layer, BG1-BG4 in bits 0-3 and sprites in bit 4
+	U8 m_mainLayers {};       // $212C
+	U8 m_subLayers {};        // $212D
+	U8 m_mainWindowLayers {}; // $212E
+	U8 m_subWindowLayers {};  // $212F
+
+	U8  m_mosaicLayers {};  // $2106 bits 0-3
+	U32 m_mosaicSize = 1;   // $2106 bits 4-7, plus 1
+	U32 m_mosaicCounter {}; // lines left in the current block
+
+	std::array<Window, 6> m_windows {};
+
+	U8 m_windowOneLeft {}; // $2126-$2129
+	U8 m_windowOneRight {};
+	U8 m_windowTwoLeft {};
+	U8 m_windowTwoRight {};
+
+	U8   m_clipToBlack {};  // $2130 bits 6-7
+	U8   m_mathWindow {};   // $2130 bits 4-5
+	bool m_addSubScreen {}; // $2130 bit 1, otherwise the fixed color
+	bool m_directColor {};  // $2130 bit 0
+	U8   m_mathLayers {};   // $2131 bits 0-5, bit 5 is the backdrop
+	bool m_halfMath {};     // $2131 bit 6
+	bool m_subtract {};     // $2131 bit 7
+	U16  m_fixedColor {};   // $2132
+
 	// Every scroll register shares these two
 	U8 m_scrollLatch {};
 	U8 m_hScrollLatch {};
@@ -111,12 +146,24 @@ private:
 	U8   m_oamLatch {};
 	bool m_oamPriorityRotation {}; // $2103 bit 7
 
-	U16  m_spriteTileAddress {}; // $2101, in words
-	U8   m_spriteNameGap {};
-	U8   m_spriteSize {};
-	bool m_spritesOnMainScreen {}; // $212C bit 4
+	U16 m_spriteTileAddress {}; // $2101, in words
+	U8  m_spriteNameGap {};
+	U8  m_spriteSize {};
 
-	std::array<LinePixel, VIDEO_WIDTH> m_line {};
+	using LayerLine = std::array<LinePixel, VIDEO_WIDTH>;
+	using LineMask = std::array<bool, VIDEO_WIDTH>;
+
+	// Which screens a layer is drawn on in this line, and on which of them its window hides it
+	struct LayerRoute {
+		bool     main {};
+		bool     sub {};
+		bool     mainWindow {};
+		bool     subWindow {};
+		LineMask window {};
+	};
+
+	LayerLine m_main {};
+	LayerLine m_sub {};
 
 	std::vector<U8> m_framebuffer = std::vector<U8>(std::size_t {VIDEO_WIDTH} * VIDEO_HEIGHT * 4); // RGBA
 
@@ -126,15 +173,20 @@ private:
 	U16  readVram() const;
 	void stepVramAddress();
 
-	const LayerFormat& layerFormat(U32 number) const;
+	const LayerFormat& layerFormat(U32 layer) const;
 	U8                 spritePriority(U32 priority) const;
 	Sprite             readSprite(U32 index) const;
 
-	void      renderLine();
-	void      renderBackground(U32 number);
-	LinePixel backgroundPixel(U32 number, const LayerFormat& format, U32 hPosition, U32 vPosition) const;
-	void      renderSprites();
-	U32       tileColor(U32 rowAddress, U32 bitsPerPixel, U32 bit) const;
+	void renderLine();
+	void renderBackground(U32 layer);
+	void renderSprites();
+
+	LinePixel  backgroundPixel(U32 layer, const LayerFormat& format, U32 hPosition, U32 vPosition) const;
+	U32        tileColor(U32 rowAddress, U32 bitsPerPixel, U32 bit) const;
+	LineMask   windowMask(U32 layer) const;
+	LayerRoute layerRoute(U32 layer) const;
+	void       plot(U32 x, const LinePixel& pixel, const LayerRoute& route);
+	U16        mixColors(U32 x, bool insideWindow) const;
 };
 
 } // namespace SNES

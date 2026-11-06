@@ -29,6 +29,13 @@ The `.sfc` files stay out of git, so download them into this folder (no subfolde
 | `multest_div16.sfc` | The same for the hardware divide | [bbbradsmith/SNES_stuff](https://github.com/bbbradsmith/SNES_stuff), `multest/` | `3246b58` | `d7ea32c1213c4983db523874f7ee388f07bca07205fc457ef6a243a6c442fbfa` |
 | `scpu-a-dma-bug-1.sfc` | H-IRQ on every line, green squares when each DMA arrives | [undisbeliever/snes-test-roms](https://github.com/undisbeliever/snes-test-roms), release `v20210217` | `78d4cb3` | `e9ca995e598625fdb3183969e260b048663b080d9fc3eeafeae83da244e507ba` |
 | `inidisp_enable_display_mid_frame.sfc` | H+V IRQ turning the display on at line 89 | [undisbeliever/snes-test-roms](https://github.com/undisbeliever/snes-test-roms), release `v20210217` | `78d4cb3` | `c8568e7f7ac13f94503cf0b3d67f623fbc216f7ae9c25c6169ee56219bc1e747` |
+| `WindowHDMA.sfc` | Window 1 inverted, its edges moved by HDMA, mode 3 | [PeterLemon/SNES](https://github.com/PeterLemon/SNES), `PPU/Window/WindowHDMA/` | `350b394` | `27594315a409d11f0182838201901aedeaaf825e986a0c9999111f08cb83ffbf` |
+| `WindowMultiHDMA.sfc` | Both windows joined by AND, the direction keys scroll the picture | [PeterLemon/SNES](https://github.com/PeterLemon/SNES), `PPU/Window/WindowMultiHDMA/` | `350b394` | `1bacb0c050a42c8ba3a53268f1bf74cd8889234ca904e195490adf3bf682f363` |
+| `HiColor3840.sfc` | Color math adding BG2 on the sub screen to BG1 | [PeterLemon/SNES](https://github.com/PeterLemon/SNES), `PPU/Blend/HiColor/HiColor3840/` | `350b394` | `b86c4a131809d923187ac14d2ee82d3aef53f7b61246f0aee8a6b2b28cab1256` |
+| `HiColor575Myst.sfc` | The same technique on a photo | [PeterLemon/SNES](https://github.com/PeterLemon/SNES), `PPU/Blend/HiColor/HiColor575Myst/` | `350b394` | `47316ae64e97fcc9d1a89611f3f6668cf036e1ca8bde5fc46c7bb07dafb48a19` |
+| `HiColor1241DLair.sfc` | The same technique, with the backdrop in the math | [PeterLemon/SNES](https://github.com/PeterLemon/SNES), `PPU/Blend/HiColor/HiColor1241DLair/` | `350b394` | `2c887a0f6de4aa63498f08c6ba921120d7688f212121c4ce33a5efa25a0dddac` |
+| `MosaicMode3.sfc` | Mosaic on BG1, L and R change the block size | [PeterLemon/SNES](https://github.com/PeterLemon/SNES), `PPU/Mosaic/Mode3/` | `350b394` | `6deebf7ddbe46392d900914dd69e6a060d868e9cc7436a486987c1fb868885db` |
+| `SNES_12.sfc` | Color math examples switched with A: add, half, subtract, fixed color | [nesdoug/SNES_12](https://github.com/nesdoug/SNES_12) | `ed12169` | `185b2096ef1055c9ed9ff78828bb24bad3d52f0511530f50cbbb18d1fbb25b34` |
 
 The PeterLemon/SNES and bbbradsmith/SNES_stuff repositories declare no license, so their files are
 used locally and not redistributed here. gilyon/snes-tests and the nesdoug/SNES_* repositories are MIT licensed,
@@ -45,6 +52,12 @@ curl -fLO https://raw.githubusercontent.com/PeterLemon/SNES/$S/PPU/BGMAP/8x8/2BP
 curl -fLO https://raw.githubusercontent.com/PeterLemon/SNES/$S/PPU/HDMA/RedSpaceHDMA/RedSpaceHDMA.sfc
 curl -fLO https://raw.githubusercontent.com/PeterLemon/SNES/$S/PPU/HDMA/RedSpaceIndirectHDMA/RedSpaceIndirectHDMA.sfc
 curl -fLO https://raw.githubusercontent.com/PeterLemon/SNES/$S/PPU/HDMA/RedSpace9BitHDMA/RedSpace9BitHDMA.sfc
+curl -fLO https://raw.githubusercontent.com/PeterLemon/SNES/$S/PPU/Window/WindowHDMA/WindowHDMA.sfc
+curl -fLO https://raw.githubusercontent.com/PeterLemon/SNES/$S/PPU/Window/WindowMultiHDMA/WindowMultiHDMA.sfc
+curl -fLO https://raw.githubusercontent.com/PeterLemon/SNES/$S/PPU/Blend/HiColor/HiColor3840/HiColor3840.sfc
+curl -fLO https://raw.githubusercontent.com/PeterLemon/SNES/$S/PPU/Blend/HiColor/HiColor575Myst/HiColor575Myst.sfc
+curl -fLO https://raw.githubusercontent.com/PeterLemon/SNES/$S/PPU/Blend/HiColor/HiColor1241DLair/HiColor1241DLair.sfc
+curl -fLO https://raw.githubusercontent.com/PeterLemon/SNES/$S/PPU/Mosaic/Mode3/MosaicMode3.sfc
 curl -fLO https://github.com/gilyon/snes-tests/releases/download/v1.4/snes-tests.zip
 unzip -j snes-tests.zip cputest/cputest-basic.sfc
 rm snes-tests.zip
@@ -56,6 +69,7 @@ curl -fLO $N/SNES_06/844ae002eef857396b43ece3ddee93d22571f27c/SNES_06.sfc
 curl -fLO $N/SNES_07/1016a0a3474e783290c5b0828428a0afe4706ce5/SNES_07.sfc
 curl -fLO $N/SNES_09/50257bd197ba5b3a3b1b3be6fcc3f741c5a72994/SNES_09.sfc
 curl -fLO $N/SNES_11/d25ba887f5f0542da77c6d44e04ac60524d0b959/SNES_11.sfc
+curl -fLO $N/SNES_12/ed12169a2c11d5f4e3804339085a6114a9050680/SNES_12.sfc
 B=https://raw.githubusercontent.com/bbbradsmith/SNES_stuff/3246b5854c91a5a2f44d1569ead0aec0e211d930/ctrltest
 curl -fLO $B/ctrltest.sfc
 curl -fLO $B/ctrltest_auto.sfc

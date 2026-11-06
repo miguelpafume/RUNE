@@ -1,5 +1,6 @@
 #include "PPU.hpp"
 
+#include <algorithm>
 #include <array>
 
 namespace SNES {
@@ -12,6 +13,7 @@ constexpr U16 OAMADDH = 0x2103;
 constexpr U16 OAMDATA = 0x2104;
 
 constexpr U16 BGMODE = 0x2105;
+constexpr U16 MOSAIC = 0x2106;
 constexpr U16 BG1SC = 0x2107;
 constexpr U16 BG2SC = 0x2108;
 constexpr U16 BG3SC = 0x2109;
@@ -36,7 +38,24 @@ constexpr U16 VMDATAH = 0x2119;
 constexpr U16 CGADD = 0x2121;
 constexpr U16 CGDATA = 0x2122;
 
+constexpr U16 W12SEL = 0x2123;
+constexpr U16 W34SEL = 0x2124;
+constexpr U16 WOBJSEL = 0x2125;
+constexpr U16 WH0 = 0x2126;
+constexpr U16 WH1 = 0x2127;
+constexpr U16 WH2 = 0x2128;
+constexpr U16 WH3 = 0x2129;
+constexpr U16 WBGLOG = 0x212A;
+constexpr U16 WOBJLOG = 0x212B;
+
 constexpr U16 TM = 0x212C;
+constexpr U16 TS = 0x212D;
+constexpr U16 TMW = 0x212E;
+constexpr U16 TSW = 0x212F;
+
+constexpr U16 CGWSEL = 0x2130;
+constexpr U16 CGADDSUB = 0x2131;
+constexpr U16 COLDATA = 0x2132;
 
 constexpr U16 RDOAM = 0x2138;
 constexpr U16 RDVRAML = 0x2139;
@@ -50,7 +69,24 @@ constexpr U8 OAMADDH_PRIORITY_ROTATION = 0x80;
 
 constexpr U8 BGMODE_BG3_ON_TOP = 0x08;
 
-constexpr U8 TM_SPRITES = 0x10;
+constexpr U8 LAYER_BITS = 0x1F;      // BG1-BG4 and sprites, in $212C-$212F
+constexpr U8 MATH_LAYER_BITS = 0x3F; // the same plus the backdrop, in $2131
+
+constexpr U8 CGWSEL_DIRECT_COLOR = 0x01;
+constexpr U8 CGWSEL_ADD_SUB_SCREEN = 0x02;
+constexpr U8 CGADDSUB_HALF = 0x40;
+constexpr U8 CGADDSUB_SUBTRACT = 0x80;
+
+constexpr U8  COLDATA_RED = 0x20;
+constexpr U8  COLDATA_GREEN = 0x40;
+constexpr U8  COLDATA_BLUE = 0x80;
+constexpr U16 COLOR_CHANNEL_MASK = 0x1F;
+
+// Layer numbers. They are also the bits of $212C-$212F and $2131, and the index of m_windows
+constexpr U32 SPRITE_LAYER = 4;
+constexpr U32 BACKDROP_LAYER = 5;
+constexpr U32 COLOR_WINDOW = 5;
+constexpr U32 SPRITE_NO_MATH_LAYER = 6; // sprites with palettes 0-3, color math skips them
 
 constexpr U8 VMAIN_INCREMENT_ON_HIGH = 0x80;
 
@@ -70,6 +106,7 @@ constexpr U32 SPRITE_COUNT = 128;
 constexpr U32 MAX_SPRITES_PER_LINE = 32;
 constexpr U32 MAX_SPRITE_TILES_PER_LINE = 34;
 constexpr U32 SPRITE_PALETTE_BASE = 128;
+constexpr U32 SPRITE_MATH_PALETTE = 192; // palettes 4-7
 
 // Small and large sprite sizes for each value of $2101 bits 5-7
 constexpr std::array<U32, 8> SMALL_WIDTHS {8, 8, 8, 16, 16, 32, 16, 16};
@@ -218,10 +255,23 @@ void PPU::writeRegister(U16 address, U8 value) {
 		m_bgMode = value & 0x07;
 		m_bg3OnTop = (value & BGMODE_BG3_ON_TOP) != 0;
 
-		for (U32 number = 0; number < m_backgrounds.size(); number++) {
-			m_backgrounds[number].bigTiles = (value & (0x10u << number)) != 0;
+		for (U32 layer = 0; layer < m_backgrounds.size(); layer++) {
+			m_backgrounds[layer].bigTiles = (value & (0x10u << layer)) != 0;
 		}
 		break;
+
+	case MOSAIC : {
+		const bool wasOn = m_mosaicLayers != 0;
+
+		m_mosaicLayers = value & 0x0F;
+		m_mosaicSize = (value >> 4) + 1u;
+
+		// The line counter starts over when mosaic turns on
+		if (!wasOn && m_mosaicLayers != 0) {
+			m_mosaicCounter = m_mosaicSize + 1;
+		}
+		break;
+	}
 
 	case BG1SC :
 	case BG2SC :
@@ -320,15 +370,99 @@ void PPU::writeRegister(U16 address, U8 value) {
 		m_cgramHighByte = !m_cgramHighByte;
 		break;
 
-	case TM :
-		for (U32 number = 0; number < m_backgrounds.size(); number++) {
-			m_backgrounds[number].onMainScreen = (value & (1u << number)) != 0;
-		}
+		// Each one sets two windows, 4 bits each
+	case W12SEL :
+	case W34SEL :
+	case WOBJSEL : {
+		const U32 first = (address - W12SEL) * 2u;
 
-		m_spritesOnMainScreen = (value & TM_SPRITES) != 0;
+		for (U32 half = 0; half < 2; half++) {
+			Window&   window = m_windows[first + half];
+			const U32 bits = value >> (half * 4);
+
+			window.oneInverted = (bits & 0x01) != 0;
+			window.oneEnabled = (bits & 0x02) != 0;
+			window.twoInverted = (bits & 0x04) != 0;
+			window.twoEnabled = (bits & 0x08) != 0;
+		}
+		break;
+	}
+
+	case WH0 :
+		m_windowOneLeft = value;
 		break;
 
-	default : // TODO: the other write registers, $2106 and $211A-$2133
+	case WH1 :
+		m_windowOneRight = value;
+		break;
+
+	case WH2 :
+		m_windowTwoLeft = value;
+		break;
+
+	case WH3 :
+		m_windowTwoRight = value;
+		break;
+
+	case WBGLOG :
+		for (U32 layer = 0; layer < m_backgrounds.size(); layer++) {
+			m_windows[layer].logic = (value >> (layer * 2)) & 0x03;
+		}
+		break;
+
+	case WOBJLOG :
+		m_windows[SPRITE_LAYER].logic = value & 0x03;
+		m_windows[COLOR_WINDOW].logic = (value >> 2) & 0x03;
+		break;
+
+	case TM :
+		m_mainLayers = value & LAYER_BITS;
+		break;
+
+	case TS :
+		m_subLayers = value & LAYER_BITS;
+		break;
+
+	case TMW :
+		m_mainWindowLayers = value & LAYER_BITS;
+		break;
+
+	case TSW :
+		m_subWindowLayers = value & LAYER_BITS;
+		break;
+
+	case CGWSEL :
+		m_directColor = (value & CGWSEL_DIRECT_COLOR) != 0;
+		m_addSubScreen = (value & CGWSEL_ADD_SUB_SCREEN) != 0;
+		m_mathWindow = (value >> 4) & 0x03;
+		m_clipToBlack = (value >> 6) & 0x03;
+		break;
+
+	case CGADDSUB :
+		m_mathLayers = value & MATH_LAYER_BITS;
+		m_halfMath = (value & CGADDSUB_HALF) != 0;
+		m_subtract = (value & CGADDSUB_SUBTRACT) != 0;
+		break;
+
+	// Bits 5-7 pick the channels that take the level in bits 0-4
+	case COLDATA : {
+		const U16 level = value & COLOR_CHANNEL_MASK;
+
+		if (value & COLDATA_RED) {
+			m_fixedColor = static_cast<U16>((m_fixedColor & ~COLOR_CHANNEL_MASK) | level);
+		}
+
+		if (value & COLDATA_GREEN) {
+			m_fixedColor = static_cast<U16>((m_fixedColor & ~(COLOR_CHANNEL_MASK << 5)) | level << 5);
+		}
+
+		if (value & COLDATA_BLUE) {
+			m_fixedColor = static_cast<U16>((m_fixedColor & ~(COLOR_CHANNEL_MASK << 10)) | level << 10);
+		}
+		break;
+	}
+
+	default : // TODO: $211A-$2120 for mode 7, and $2133
 		break;
 	}
 }
@@ -356,9 +490,8 @@ U16 PPU::readVram() const { return canAccessVram() ? m_vram[vramIndex()] : U16 {
 
 void PPU::stepVramAddress() { m_vramAddress = (m_vramAddress + m_vramIncrement) & VRAM_ADDRESS_MASK; }
 
-// Turns one color channel from CGRAM into one framebuffer byte, like the accurate PPU of bsnes
-// The 5 bits are repeated to fill 16, so 31 becomes $FFFF, then brightness scales by (b + 1) / 16
-// Brightness 0 still leaves a quarter of level 1, only forced blank is black
+// One 5-bit channel to one framebuffer byte, scaled by (brightness + 1) / 16
+// Brightness 0 still leaves a little light, only forced blank is black
 static U8 outputChannel(U32 channel, U32 brightness) {
 	const U32 wide = channel << 11 | channel << 6 | channel << 1 | channel >> 4;
 	const U32 level = brightness == 0 ? wide / 64 : wide * (brightness + 1) / 16;
@@ -366,9 +499,18 @@ static U8 outputChannel(U32 channel, U32 brightness) {
 	return static_cast<U8>(level >> 8);
 }
 
+// The 8 bits of the pixel are BBGGGRRR, and the 3 palette bits add one more low bit to each channel
+static U16 directColor(U32 palette, U32 color) {
+	const U32 red = (color & 0x07) << 2 | (palette & 0x01) << 1;
+	const U32 green = (color >> 3 & 0x07) << 2 | (palette >> 1 & 0x01) << 1;
+	const U32 blue = (color >> 6 & 0x03) << 3 | (palette >> 2 & 0x01) << 2;
+
+	return static_cast<U16>(blue << 10 | green << 5 | red);
+}
+
 // The layers of each video mode
 // A higher priority covers a lower one, the numbers in between are for the sprites
-const PPU::LayerFormat& PPU::layerFormat(U32 number) const {
+const PPU::LayerFormat& PPU::layerFormat(U32 layer) const {
 	static constexpr std::array<LayerFormat, 4> MODE_0 {{
 	    {2, 8, 11},
 	    {2, 7, 10},
@@ -387,17 +529,26 @@ const PPU::LayerFormat& PPU::layerFormat(U32 number) const {
 	    {2, 1, 10},
 	    {},
 	}};
+	static constexpr std::array<LayerFormat, 4> MODE_3 {{
+	    {8, 3, 7},
+	    {4, 1, 5},
+	    {},
+	    {},
+	}};
 	static constexpr std::array<LayerFormat, 4> NO_LAYERS {};
 
 	switch (m_bgMode) {
 	case 0 :
-		return MODE_0[number];
+		return MODE_0[layer];
 
 	case 1 :
-		return m_bg3OnTop ? MODE_1_BG3_ON_TOP[number] : MODE_1[number];
+		return m_bg3OnTop ? MODE_1_BG3_ON_TOP[layer] : MODE_1[layer];
 
-	default : // TODO: modes 2-7
-		return NO_LAYERS[number];
+	case 3 :
+		return MODE_3[layer];
+
+	default : // TODO: modes 2 and 4-7
+		return NO_LAYERS[layer];
 	}
 }
 
@@ -406,6 +557,7 @@ U8 PPU::spritePriority(U32 priority) const {
 	static constexpr std::array<U8, 4> MODE_0 {3, 6, 9, 12};
 	static constexpr std::array<U8, 4> MODE_1 {2, 4, 7, 10};
 	static constexpr std::array<U8, 4> MODE_1_BG3_ON_TOP {2, 3, 6, 9};
+	static constexpr std::array<U8, 4> MODE_3 {2, 4, 6, 8};
 
 	switch (m_bgMode) {
 	case 0 :
@@ -414,24 +566,45 @@ U8 PPU::spritePriority(U32 priority) const {
 	case 1 :
 		return m_bg3OnTop ? MODE_1_BG3_ON_TOP[priority] : MODE_1[priority];
 
-	default : // TODO: modes 2-7
+	case 3 :
+		return MODE_3[priority];
+
+	default : // TODO: modes 2 and 4-7
 		return 0;
 	}
 }
 
 void PPU::renderLine() {
-	m_line.fill({});
+	// Mosaic repeats the first line of each block, and the counter says how far in this line is
+	if (m_scanline == 1) {
+		m_mosaicCounter = m_mosaicLayers != 0 ? m_mosaicSize + 1 : 0;
+	}
 
-	for (U32 number = 0; number < m_backgrounds.size(); number++) {
-		renderBackground(number);
+	if (m_mosaicCounter != 0 && --m_mosaicCounter == 0) {
+		m_mosaicCounter = m_mosaicLayers != 0 ? m_mosaicSize : 0;
+	}
+
+	// Where no layer draws, the main screen shows color 0 and the sub screen the fixed color
+	m_main.fill({0, BACKDROP_LAYER, m_cgram[0]});
+	m_sub.fill({0, BACKDROP_LAYER, m_fixedColor});
+
+	for (U32 layer = 0; layer < m_backgrounds.size(); layer++) {
+		renderBackground(layer);
 	}
 
 	renderSprites();
 
+	const LineMask window = windowMask(COLOR_WINDOW);
+	const bool     mixing = m_mathLayers != 0 || m_clipToBlack != 0;
+
 	U8* pixel = &m_framebuffer[std::size_t {m_scanline - 1} * VIDEO_WIDTH * 4];
 
-	for (const LinePixel& linePixel : m_line) {
-		const U16 color = m_forcedBlank ? 0 : m_cgram[linePixel.color];
+	for (U32 x = 0; x < VIDEO_WIDTH; x++) {
+		U16 color = mixing ? mixColors(x, window[x]) : m_main[x].color;
+
+		if (m_forcedBlank) {
+			color = 0;
+		}
 
 		pixel[0] = outputChannel(color & 0x1F, m_brightness);
 		pixel[1] = outputChannel((color >> 5) & 0x1F, m_brightness);
@@ -441,27 +614,36 @@ void PPU::renderLine() {
 	}
 }
 
-void PPU::renderBackground(U32 number) {
-	const Background&  background = m_backgrounds[number];
-	const LayerFormat& format = layerFormat(number);
+void PPU::renderBackground(U32 layer) {
+	const LayerFormat& format = layerFormat(layer);
+	const U32          bit = 1u << layer;
 
-	if (!background.onMainScreen || format.bitsPerPixel == 0) {
+	if (!((m_mainLayers | m_subLayers) & bit) || format.bitsPerPixel == 0) {
 		return;
 	}
 
-	for (U32 x = 0; x < VIDEO_WIDTH; x++) {
-		const LinePixel pixel = backgroundPixel(number, format, x + background.hScroll, m_scanline + background.vScroll);
+	const Background& background = m_backgrounds[layer];
 
-		// A transparent pixel has priority 0, so it never wins
-		if (pixel.priority > m_line[x].priority) {
-			m_line[x] = pixel;
+	// With mosaic, each block takes the pixel at its top left corner
+	const bool mosaic = (m_mosaicLayers & bit) != 0;
+	const U32  line = mosaic ? m_scanline - (m_mosaicSize - m_mosaicCounter) : m_scanline;
+
+	const LayerRoute route = layerRoute(layer);
+
+	LinePixel pixel;
+
+	for (U32 x = 0; x < VIDEO_WIDTH; x++) {
+		if (!mosaic || x % m_mosaicSize == 0) {
+			pixel = backgroundPixel(layer, format, x + background.hScroll, line + background.vScroll);
 		}
+
+		plot(x, pixel, route);
 	}
 }
 
-// The priority and the CGRAM color of one pixel of a background
-PPU::LinePixel PPU::backgroundPixel(U32 number, const LayerFormat& format, U32 hPosition, U32 vPosition) const {
-	const Background& background = m_backgrounds[number];
+// The priority and the color of one pixel of a background
+PPU::LinePixel PPU::backgroundPixel(U32 layer, const LayerFormat& format, U32 hPosition, U32 vPosition) const {
+	const Background& background = m_backgrounds[layer];
 
 	const U32 tileShift = background.bigTiles ? 4 : 3;
 	const U32 mapX = hPosition >> tileShift;
@@ -507,14 +689,19 @@ PPU::LinePixel PPU::backgroundPixel(U32 number, const LayerFormat& format, U32 h
 		return {};
 	}
 
-	// In mode 0 each background has its own 32 colors
-	const U32 base = m_bgMode == 0 ? number << 5 : 0;
+	const U8  priority = (entry & MAP_PRIORITY) ? format.highPriority : format.lowPriority;
 	const U32 palette = (entry >> 10) & 0x07;
 
-	return {
-	    (entry & MAP_PRIORITY) ? format.highPriority : format.lowPriority,
-	    static_cast<U8>(base + (palette << format.bitsPerPixel) + color)
-	};
+	// In modes 3 and 4, BG1 can skip CGRAM and build the color from its 8 bits and the palette
+	if (m_directColor && layer == 0 && (m_bgMode == 3 || m_bgMode == 4)) {
+		return {priority, 0, directColor(palette, color)};
+	}
+
+	// In mode 0 each background has its own 32 colors. With 8 bits there is no palette
+	const U32 base = m_bgMode == 0 ? layer << 5 : 0;
+	const U8  index = static_cast<U8>(base + (palette << format.bitsPerPixel) + color);
+
+	return {priority, static_cast<U8>(layer), m_cgram[index]};
 }
 
 // Each sprite takes 4 bytes in the low table and 2 bits in the high one
@@ -540,7 +727,7 @@ PPU::Sprite PPU::readSprite(U32 index) const {
 }
 
 void PPU::renderSprites() {
-	if (!m_spritesOnMainScreen) {
+	if (!((m_mainLayers | m_subLayers) & (1u << SPRITE_LAYER))) {
 		return;
 	}
 
@@ -568,7 +755,7 @@ void PPU::renderSprites() {
 
 	// Tiles are fetched from the last sprite back to the first, and only 34 fit in a line
 	// So the first sprites are the ones that lose tiles, and they are drawn last, on top of the others
-	std::array<LinePixel, VIDEO_WIDTH> pixels {};
+	LayerLine pixels {};
 
 	U32 tiles = 0;
 
@@ -615,9 +802,12 @@ void PPU::renderSprites() {
 				const U32 color = tileColor(rowAddress, 4, sprite.flipX ? pixel : 7 - pixel);
 
 				if (screenX < VIDEO_WIDTH && color != 0) {
+					const U32 index = SPRITE_PALETTE_BASE + (sprite.palette << 4) + color;
+
 					pixels[screenX] = {
 					    spritePriority(sprite.priority),
-					    static_cast<U8>(SPRITE_PALETTE_BASE + (sprite.palette << 4) + color),
+					    static_cast<U8>(index >= SPRITE_MATH_PALETTE ? SPRITE_LAYER : SPRITE_NO_MATH_LAYER),
+					    m_cgram[index],
 					};
 				}
 			}
@@ -625,10 +815,10 @@ void PPU::renderSprites() {
 	}
 
 	// Only now the sprites meet the backgrounds, each pixel with the priority of the sprite that won it
+	const LayerRoute route = layerRoute(SPRITE_LAYER);
+
 	for (U32 x = 0; x < VIDEO_WIDTH; x++) {
-		if (pixels[x].priority > m_line[x].priority) {
-			m_line[x] = pixels[x];
-		}
+		plot(x, pixels[x], route);
 	}
 }
 
@@ -644,6 +834,128 @@ U32 PPU::tileColor(U32 rowAddress, U32 bitsPerPixel, U32 bit) const {
 	}
 
 	return color;
+}
+
+// Which pixels of the line are inside the layer's window. Each of the two windows can be
+// inverted, and when both are on, the logic of $212A-$212B joins them
+PPU::LineMask PPU::windowMask(U32 layer) const {
+	const Window& window = m_windows[layer];
+	LineMask      inside {};
+
+	if (!window.oneEnabled && !window.twoEnabled) {
+		return inside;
+	}
+
+	for (U32 x = 0; x < VIDEO_WIDTH; x++) {
+		const bool one = (x >= m_windowOneLeft && x <= m_windowOneRight) != window.oneInverted;
+		const bool two = (x >= m_windowTwoLeft && x <= m_windowTwoRight) != window.twoInverted;
+
+		if (!window.twoEnabled) {
+			inside[x] = one;
+		} else if (!window.oneEnabled) {
+			inside[x] = two;
+		} else {
+			switch (window.logic) {
+			case 0 :
+				inside[x] = one || two;
+				break;
+
+			case 1 :
+				inside[x] = one && two;
+				break;
+
+			case 2 :
+				inside[x] = one != two;
+				break;
+
+			default :
+				inside[x] = one == two;
+				break;
+			}
+		}
+	}
+
+	return inside;
+}
+
+// Read once per layer and line, so drawing each pixel doesn't go back to the registers
+PPU::LayerRoute PPU::layerRoute(U32 layer) const {
+	const U32 bit = 1u << layer;
+
+	return {
+	    (m_mainLayers & bit) != 0,
+	    (m_subLayers & bit) != 0,
+	    (m_mainWindowLayers & bit) != 0,
+	    (m_subWindowLayers & bit) != 0,
+	    windowMask(layer),
+	};
+}
+
+// Draws the pixel on the main and the sub screen, where the route lets it through
+// A transparent pixel has priority 0, so it never wins
+void PPU::plot(U32 x, const LinePixel& pixel, const LayerRoute& route) {
+	if (route.main && !(route.mainWindow && route.window[x]) && pixel.priority > m_main[x].priority) {
+		m_main[x] = pixel;
+	}
+
+	if (route.sub && !(route.subWindow && route.window[x]) && pixel.priority > m_sub[x].priority) {
+		m_sub[x] = pixel;
+	}
+}
+
+// $2130 bits 4-5 and 6-7: 0 everywhere, 1 inside the color window, 2 outside it, 3 nowhere
+static bool colorWindowAllows(U32 setting, bool insideWindow) {
+	switch (setting) {
+	case 0 :
+		return true;
+
+	case 1 :
+		return insideWindow;
+
+	case 2 :
+		return !insideWindow;
+
+	default :
+		return false;
+	}
+}
+
+// Adds or subtracts each 5-bit channel, kept between 0 and 31, and halves it if asked
+static U16 blend(U16 first, U16 second, bool subtract, bool halve) {
+	U32 result = 0;
+
+	for (U32 shift = 0; shift < 15; shift += 5) {
+		const U32 a = (first >> shift) & COLOR_CHANNEL_MASK;
+		const U32 b = (second >> shift) & COLOR_CHANNEL_MASK;
+
+		U32 channel = subtract ? (a > b ? a - b : 0) : a + b;
+
+		if (halve) {
+			channel >>= 1;
+		}
+
+		result |= std::min<U32>(channel, COLOR_CHANNEL_MASK) << shift;
+	}
+
+	return static_cast<U16>(result);
+}
+
+// Color math, like the fast PPU of bsnes. The main screen pixel takes the sub screen
+// pixel or the fixed color, if its layer is on in $2131 and the color window allows
+U16 PPU::mixColors(U32 x, bool insideWindow) const {
+	const LinePixel& main = m_main[x];
+	const bool       clipped = !colorWindowAllows(m_clipToBlack, insideWindow);
+	const U16        color = clipped ? 0 : main.color;
+
+	if (!colorWindowAllows(m_mathWindow, insideWindow) || !(m_mathLayers & (1u << main.layer))) {
+		return color;
+	}
+
+	// Halving skips black pixels and the sub screen backdrop
+	const bool subBackdrop = m_addSubScreen && m_sub[x].layer == BACKDROP_LAYER;
+	const bool halve = m_halfMath && !clipped && !subBackdrop;
+
+	return blend(color, m_addSubScreen ? m_sub[x].color : m_fixedColor, m_subtract, halve);
 }
 
 } // namespace SNES
