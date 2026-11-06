@@ -48,15 +48,30 @@ constexpr U16 INTERNAL_LAST = 0x421F;
 constexpr U16 DMA_FIRST = 0x4300; // 8 channels x 16 bytes
 constexpr U16 DMA_LAST = 0x437F;
 constexpr U16 NMITIMEN = 0x4200;
+constexpr U16 WRMPYA = 0x4202;
+constexpr U16 WRMPYB = 0x4203;
+constexpr U16 WRDIVL = 0x4204;
+constexpr U16 WRDIVH = 0x4205;
+constexpr U16 WRDIVB = 0x4206;
+constexpr U16 HTIMEL = 0x4207;
+constexpr U16 HTIMEH = 0x4208;
+constexpr U16 VTIMEL = 0x4209;
+constexpr U16 VTIMEH = 0x420A;
 constexpr U16 MDMAEN = 0x420B;
 constexpr U16 HDMAEN = 0x420C;
 constexpr U16 MEMSEL = 0x420D;
 constexpr U16 RDNMI = 0x4210;
+constexpr U16 TIMEUP = 0x4211;
 constexpr U16 HVBJOY = 0x4212;
+constexpr U16 RDDIVL = 0x4214;
+constexpr U16 RDMPYL = 0x4216;
+constexpr U16 RDMPYH = 0x4217;
 constexpr U16 JOY_FIRST = 0x4218; // 4 controllers x 2 bytes
 constexpr U16 JOY_LAST = 0x421F;
 
 constexpr U8 NMITIMEN_NMI = 0x80;
+constexpr U8 NMITIMEN_V_IRQ = 0x20;
+constexpr U8 NMITIMEN_H_IRQ = 0x10;
 constexpr U8 NMITIMEN_AUTO_JOYPAD = 0x01;
 
 constexpr U8 MEMSEL_FASTROM = 0x01;
@@ -64,6 +79,9 @@ constexpr U8 MEMSEL_FASTROM = 0x01;
 constexpr U8 RDNMI_FLAG = 0x80;
 constexpr U8 RDNMI_OPEN_BUS_MASK = 0x70;
 constexpr U8 CPU_VERSION = 0x02; // the value bsnes and MesenCE report
+
+constexpr U8 TIMEUP_FLAG = 0x80;
+constexpr U8 TIMEUP_OPEN_BUS_MASK = 0x7F;
 
 constexpr U8 HVBJOY_VBLANK = 0x80;
 constexpr U8 HVBJOY_HBLANK = 0x40;
@@ -89,11 +107,22 @@ constexpr U32 CYCLES_INTERNAL = CYCLES_FAST; // cycles that don't touch memory t
 constexpr U32 HDMA_SETUP_POSITION = 12;
 constexpr U32 HDMA_POSITION = 1104;
 constexpr U32 DMA_CLOCK_CYCLES = 8;
-constexpr U32 NO_HDMA = std::numeric_limits<U32>::max();
+constexpr U32 NO_HDMA = U32_MAX;
 
 // The CPU stops for this once per line, while the WRAM refreshes
 constexpr U32 DRAM_REFRESH_POSITION = 538;
 constexpr U32 DRAM_REFRESH_CYCLES = 40;
+constexpr U32 DRAM_REFRESH_ALU_STEPS = 5; // the multiplier and divider keep going during it
+
+// Where the IRQ fires in the line, like bsnes. The counters look 10 cycles back
+constexpr U32 V_IRQ_POSITION = 10;
+constexpr U32 H_IRQ_POSITION = 14; // plus 4 cycles per dot of HTIME
+constexpr U32 NO_IRQ = U32_MAX;
+constexpr U32 IRQ_BLOCKED_POSITION = 6; // in line 0, both counters still read 0 here
+constexpr U8  HV_TIME_HIGH_MASK = 0x01; // HTIME and VTIME have 9 bits
+
+constexpr U32 MULTIPLY_STEPS = 8;
+constexpr U32 DIVIDE_STEPS = 16;
 
 Bus::Bus(Mode mode) : m_mode {mode} {
 	if (m_mode == Mode::Test) {
@@ -139,15 +168,27 @@ void Bus::advanceClock(U32 cycles) {
 	const U32 hClock = m_ppu->hClock();
 
 	// H went back, so a new line started
-	if (hClock < hClockBefore)
+	if (hClock < hClockBefore) {
 		startHdmaLine(hClock);
+		m_irqPosition = irqPosition();
+	}
 
 	if (hClock >= m_hdmaPosition)
 		hdmaEdge();
 
+	if (hClock >= m_irqPosition) {
+		m_irqLine = true;
+		m_irqPosition = NO_IRQ;
+	}
+
 	// Accesses cost 6, 8 or 12, so H can jump over the exact position
-	if (hClockBefore < DRAM_REFRESH_POSITION && hClock >= DRAM_REFRESH_POSITION)
+	if (hClockBefore < DRAM_REFRESH_POSITION && hClock >= DRAM_REFRESH_POSITION) {
 		advanceClock(DRAM_REFRESH_CYCLES);
+
+		for (U32 step = 0; step < DRAM_REFRESH_ALU_STEPS; step++) {
+			aluEdge();
+		}
+	}
 }
 
 // One step of the auto joypad read, the same state machine as bsnes
@@ -204,12 +245,121 @@ void Bus::latchPorts() {
 }
 
 // Taking it also clears it, so each V-Blank fires only one NMI
+// false means the IRQ, the only other one interruptPolled() can see
 bool Bus::takeNmi() {
-	const bool pending = m_nmiPending;
+	if (!m_nmiPolled) {
+		return false;
+	}
 
+	m_nmiPolled = false;
 	m_nmiPending = false;
 
-	return pending;
+	return true;
+}
+
+// H where the IRQ fires in the current line, NO_IRQ if it doesn't
+U32 Bus::irqPosition() const {
+	const U32 line = m_ppu->scanline();
+
+	if (!m_hIrq) {
+		return m_vIrq && line == m_vTime ? V_IRQ_POSITION : NO_IRQ;
+	}
+
+	// HTIME 340 and above is past the last dot
+	if (m_hTime >= DOTS_PER_SCANLINE - 1) {
+		return NO_IRQ;
+	}
+
+	U32 position = H_IRQ_POSITION + m_hTime * CYCLES_PER_DOT;
+	U32 vLine = line;
+
+	// HTIME 338 and 339 fire early in the next line, still matched against the line before
+	if (position >= CYCLES_PER_SCANLINE) {
+		position -= CYCLES_PER_SCANLINE;
+		vLine = (line == 0 ? SCANLINES_PER_FRAME : line) - 1;
+
+		if (line == 0 && position == IRQ_BLOCKED_POSITION) {
+			return NO_IRQ;
+		}
+	}
+
+	if (m_vIrq && vLine != m_vTime) {
+		return NO_IRQ;
+	}
+
+	return position;
+}
+
+// V-IRQ alone holds from its position to the end of the line
+bool Bus::vIrqHolds() const { return m_vIrq && !m_hIrq && m_ppu->scanline() == m_vTime && m_ppu->hClock() >= V_IRQ_POSITION; }
+
+// After a write to $4200 or $4207-$420A, in the middle of the line
+void Bus::rescheduleIrq(bool heldBefore) {
+	m_irqPosition = irqPosition();
+
+	if (m_irqPosition > m_ppu->hClock()) {
+		return;
+	}
+
+	m_irqPosition = NO_IRQ;
+
+	// The H position already went by, but V-IRQ alone fires when it starts to hold
+	if (!heldBefore && vIrqHolds()) {
+		m_irqLine = true;
+	}
+}
+
+// bsnes's long multiply and divide, one bit per CPU cycle
+// A write while one is running is ignored
+void Bus::startMultiply(U8 value) {
+	m_rdmpy = 0;
+
+	if (m_aluSteps != 0) {
+		return;
+	}
+
+	// RDDIV holds both factors and shifts right, so it ends with WRMPYB
+	m_rddiv = static_cast<U16>(value << 8 | m_wrmpya);
+	m_aluShift = value;
+	m_aluSteps = MULTIPLY_STEPS;
+	m_dividing = false;
+}
+
+void Bus::startDivide(U8 value) {
+	m_rdmpy = m_wrdiva;
+
+	if (m_aluSteps != 0) {
+		return;
+	}
+
+	// Dividing by 0 gives $FFFF and leaves the dividend as the remainder
+	m_aluShift = U32 {value} << 16;
+	m_aluSteps = DIVIDE_STEPS;
+	m_dividing = true;
+}
+
+// Multiply: for each 1 bit of the first factor, adds the second one shifted to that bit
+// Divide: wherever the shifted divisor fits, takes it out and that quotient bit becomes 1
+void Bus::aluStep() {
+	m_aluSteps--;
+
+	if (!m_dividing) {
+		if (m_rddiv & 1) {
+			m_rdmpy = static_cast<U16>(m_rdmpy + m_aluShift);
+		}
+
+		m_rddiv >>= 1;
+		m_aluShift <<= 1;
+		return;
+	}
+
+	m_rddiv = static_cast<U16>(m_rddiv << 1);
+	m_aluShift >>= 1;
+
+	if (m_rdmpy >= m_aluShift) {
+		m_rdmpy = static_cast<U16>(m_rdmpy - m_aluShift);
+		m_rddiv |= 1;
+	}
 }
 
 void Bus::startHdmaLine(U32 hClock) {
@@ -258,13 +408,20 @@ Bus::HdmaRequest Bus::takeHdma() {
 	return request;
 }
 
-// One CPU cycle. A DMA written to $420B, or an HDMA that came due, goes first
+// One CPU cycle. A pending DMA or HDMA goes first, then the interrupts are sampled for the CPU
 void Bus::chargeAccess(U32 cycles) {
 	if (m_dmaPending != 0 || m_hdmaRequest != HdmaRequest::None) {
 		const U8 channels = m_dmaPending;
 
 		m_dmaPending = 0;
 		m_dma->run(channels, cycles);
+
+		// Right after a DMA the CPU misses one look
+		m_nmiPolled = false;
+		m_irqPolled = false;
+	} else {
+		m_nmiPolled = m_nmiPending;
+		m_irqPolled = m_irqLine && !m_irqDisable;
 	}
 
 	advanceClock(cycles);
@@ -294,6 +451,9 @@ U8 Bus::readCycle(U32 address, CycleKind kind, bool memoryLock) {
 	chargeAccess(accessCycles(target));
 
 	const U8 value = readSystem(target);
+
+	// The multiplier moves after the read, so the result read is the one from before
+	aluEdge();
 
 	// $4xxx registers are inside the CPU, reading them doesn't reach the data bus
 	if (m_blockType[target >> BLOCK_SHIFT] != BlockType::CpuRegisters) {
@@ -378,6 +538,7 @@ void Bus::writeData(U32 address, U8 value, bool memoryLock) {
 	}
 
 	chargeAccess(accessCycles(target));
+	aluEdge();
 
 	m_openBus = value;
 	writeSystem(target, value);
@@ -394,6 +555,7 @@ void Bus::internalCycle(U32 address, bool memoryLock) {
 	}
 
 	chargeAccess(CYCLES_INTERNAL);
+	aluEdge();
 }
 
 void Bus::invalidWrite(U32 address, U8 value, bool memoryLock) {
@@ -407,6 +569,7 @@ void Bus::invalidWrite(U32 address, U8 value, bool memoryLock) {
 	}
 
 	chargeAccess(CYCLES_INTERNAL);
+	aluEdge();
 }
 
 void Bus::haltedCycle() {
@@ -417,7 +580,11 @@ void Bus::haltedCycle() {
 		return;
 	}
 
+	// Only WAI and STP get here
+	m_irqWake = m_irqLine;
+
 	chargeAccess(CYCLES_INTERNAL);
+	aluEdge();
 }
 
 void Bus::setFlags(bool emulation, bool flagM, bool flagX) {
@@ -639,7 +806,22 @@ U8 Bus::readCpuRegister(U32 address) {
 			return static_cast<U8>((index & 1) ? joy >> 8 : joy);
 		}
 
-		// TODO: $4211 and $4213-$4217 status and results
+		// Reading clears it, so the IRQ handler acknowledges it here
+		if (offset == TIMEUP) {
+			const U8 value = static_cast<U8>((m_irqLine ? TIMEUP_FLAG : 0) | (m_openBus & TIMEUP_OPEN_BUS_MASK));
+
+			m_irqLine = false;
+
+			return value;
+		}
+
+		if (offset >= RDDIVL && offset <= RDMPYH) {
+			const U16 result = offset < RDMPYL ? m_rddiv : m_rdmpy;
+
+			return static_cast<U8>((offset & 1) ? result >> 8 : result);
+		}
+
+		// TODO: $4213 programmable I/O port
 		return m_openBus;
 	}
 
@@ -662,8 +844,9 @@ void Bus::writeCpuRegister(U32 address, U8 value) {
 
 	if (offset >= INTERNAL_FIRST && offset <= INTERNAL_LAST) {
 		switch (offset) {
-		case NMITIMEN : { // TODO: bits 4-5, H/V IRQ
+		case NMITIMEN : {
 			const bool enable = (value & NMITIMEN_NMI) != 0;
+			const bool heldBefore = vIrqHolds();
 
 			// Turning it on in the middle of V-Blank fires right away, if $4210 wasn't read yet
 			if (enable && !m_nmiEnable && m_nmiFlag) {
@@ -681,6 +864,52 @@ void Bus::writeCpuRegister(U32 address, U8 value) {
 				m_joypadStep = JOYPAD_STEPS;
 			}
 
+			m_hIrq = (value & NMITIMEN_H_IRQ) != 0;
+			m_vIrq = (value & NMITIMEN_V_IRQ) != 0;
+
+			// Turning both off also drops an IRQ that was waiting
+			if (!m_hIrq && !m_vIrq) {
+				m_irqLine = false;
+			}
+
+			rescheduleIrq(heldBefore);
+			break;
+		}
+
+		case WRMPYA :
+			m_wrmpya = value;
+			break;
+
+		case WRMPYB :
+			startMultiply(value);
+			break;
+
+		case WRDIVL :
+			m_wrdiva = static_cast<U16>((m_wrdiva & 0xFF00) | value);
+			break;
+
+		case WRDIVH :
+			m_wrdiva = static_cast<U16>((m_wrdiva & 0x00FF) | value << 8);
+			break;
+
+		case WRDIVB :
+			startDivide(value);
+			break;
+
+		case HTIMEL :
+		case HTIMEH :
+		case VTIMEL :
+		case VTIMEH : {
+			const bool heldBefore = vIrqHolds();
+			U16&       time = offset <= HTIMEH ? m_hTime : m_vTime;
+
+			if (offset == HTIMEL || offset == VTIMEL) {
+				time = static_cast<U16>((time & 0x100) | value);
+			} else {
+				time = static_cast<U16>((time & 0x0FF) | (value & HV_TIME_HIGH_MASK) << 8);
+			}
+
+			rescheduleIrq(heldBefore);
 			break;
 		}
 
@@ -696,7 +925,7 @@ void Bus::writeCpuRegister(U32 address, U8 value) {
 			m_fastRom = (value & MEMSEL_FASTROM) != 0;
 			break;
 
-		default : // TODO: $4201-$420A multiply and divide, H/V IRQ
+		default : // TODO: $4201 programmable I/O port
 			break;
 		}
 

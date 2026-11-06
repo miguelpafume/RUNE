@@ -10,10 +10,7 @@
 
 namespace SNES {
 
-using RUNE::U16;
-using RUNE::U32;
-using RUNE::U64;
-using RUNE::U8;
+using namespace RUNE;
 
 class APU;
 class Cartridge;
@@ -96,6 +93,14 @@ public:
 	void advanceClock(U32 cycles);
 	bool takeNmi();
 
+	// What the CPU saw at the start of the last cycle of the instruction
+	// The IRQ stays up until $4211 is read, so taking it doesn't clear it
+	bool interruptPolled() const { return m_nmiPolled || m_irqPolled; }
+	bool irqWakes() const { return m_irqWake; }
+
+	// Copy of the CPU's I flag, the Bus samples it with the IRQ line
+	void setIrqDisable(bool disable) { m_irqDisable = disable; }
+
 	HdmaRequest takeHdma();
 
 	U8   dmaRead(U32 address, bool valid);
@@ -143,6 +148,7 @@ private:
 	bool m_nmiEnable {};  // $4200 bit 7
 	bool m_nmiFlag {};    // $4210 bit 7
 	bool m_nmiPending {}; // the CPU takes it before the next instruction
+	bool m_nmiPolled {};  // m_nmiPending at the start of the last CPU cycle
 	bool m_fastRom {};    // $420D bit 0
 
 	// The console reads the controllers on its own, in 33 steps of 128 cycles
@@ -170,8 +176,29 @@ private:
 
 	U8 m_dmaPending {}; // channels written to $420B
 
+	bool m_hIrq {};       // $4200 bit 4
+	bool m_vIrq {};       // $4200 bit 5
+	U16  m_hTime = 0x1FF; // $4207-$4208, in dots
+	U16  m_vTime = 0x1FF; // $4209-$420A
+	bool m_irqLine {};    // $4211 bit 7
+
+	U32 m_irqPosition = U32_MAX; // H of the IRQ in this line
+
+	bool m_irqDisable = true; // the CPU's I flag
+	bool m_irqPolled {};      // m_irqLine and I clear, at the start of the last CPU cycle
+	bool m_irqWake {};        // m_irqLine at the start of the last halted cycle, I doesn't matter
+
+	// Multiplier and divider, one bit per CPU cycle
+	U8   m_wrmpya = 0xFF;   // $4202
+	U16  m_wrdiva = 0xFFFF; // $4204-$4205
+	U16  m_rddiv {};        // $4214-$4215
+	U16  m_rdmpy {};        // $4216-$4217
+	U32  m_aluShift {};
+	U32  m_aluSteps {}; // left in the one running
+	bool m_dividing {};
+
 	HdmaRequest m_hdmaRequest {};
-	U32         m_hdmaPosition = std::numeric_limits<U32>::max(); // H of the next HDMA step in this line
+	U32         m_hdmaPosition = U32_MAX; // H of the next HDMA step in this line
 	bool        m_hdmaSetupDone = true;
 
 	std::size_t m_cycleBudget = std::numeric_limits<std::size_t>::max();
@@ -181,6 +208,19 @@ private:
 
 	void startHdmaLine(U32 hClock);
 	void hdmaEdge();
+
+	U32  irqPosition() const;
+	bool vIrqHolds() const;
+	void rescheduleIrq(bool heldBefore);
+
+	void startMultiply(U8 value);
+	void startDivide(U8 value);
+	void aluStep();
+
+	void aluEdge() {
+		if (m_aluSteps != 0)
+			aluStep();
+	}
 
 	void spendCycle();
 	void chargeAccess(U32 cycles);

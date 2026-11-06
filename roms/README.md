@@ -25,9 +25,14 @@ The `.sfc` files stay out of git, so download them into this folder (no subfolde
 | `ctrltest.sfc` | Controller bits read by hand through `$4016` and `$4017` | [bbbradsmith/SNES_stuff](https://github.com/bbbradsmith/SNES_stuff), `ctrltest/` | `3246b58` | `48432413b80863ed884ba76a2892f6eda2277ea5349e8ef13347f70b9aa98983` |
 | `ctrltest_auto.sfc` | The same bits from the automatic read, `$4218`-`$421F` | [bbbradsmith/SNES_stuff](https://github.com/bbbradsmith/SNES_stuff), `ctrltest/` | `3246b58` | `ae660b7c49941901b48e25837793ab946befe00de5d3038d404cfdee77dfc82f` |
 | `ctrltest_simple.sfc` | Each button of both controllers, from the automatic read | [bbbradsmith/SNES_stuff](https://github.com/bbbradsmith/SNES_stuff), `ctrltest/` | `3246b58` | `445afc4c735790e272d5312f3520570013c999534740b8dd7c729c2b066d8e7c` |
+| `multest_mul16.sfc` | Hardware multiply results read right on time, halts with "Fail!" otherwise | [bbbradsmith/SNES_stuff](https://github.com/bbbradsmith/SNES_stuff), `multest/` | `3246b58` | `a18b57398fdc611072b88ae3a4fbb7d1c6682d2841ae8863fd8037eacbb495cb` |
+| `multest_div16.sfc` | The same for the hardware divide | [bbbradsmith/SNES_stuff](https://github.com/bbbradsmith/SNES_stuff), `multest/` | `3246b58` | `d7ea32c1213c4983db523874f7ee388f07bca07205fc457ef6a243a6c442fbfa` |
+| `scpu-a-dma-bug-1.sfc` | H-IRQ on every line, green squares when each DMA arrives | [undisbeliever/snes-test-roms](https://github.com/undisbeliever/snes-test-roms), release `v20210217` | `78d4cb3` | `e9ca995e598625fdb3183969e260b048663b080d9fc3eeafeae83da244e507ba` |
+| `inidisp_enable_display_mid_frame.sfc` | H+V IRQ turning the display on at line 89 | [undisbeliever/snes-test-roms](https://github.com/undisbeliever/snes-test-roms), release `v20210217` | `78d4cb3` | `c8568e7f7ac13f94503cf0b3d67f623fbc216f7ae9c25c6169ee56219bc1e747` |
 
 The PeterLemon/SNES and bbbradsmith/SNES_stuff repositories declare no license, so their files are
-used locally and not redistributed here. gilyon/snes-tests and the nesdoug/SNES_* repositories are MIT licensed.
+used locally and not redistributed here. gilyon/snes-tests and the nesdoug/SNES_* repositories are MIT licensed,
+undisbeliever/snes-test-roms is zlib licensed.
 
 ```sh
 S=350b394e86ec5d62f600b5cbf64cdce3721bb6ef
@@ -55,4 +60,10 @@ B=https://raw.githubusercontent.com/bbbradsmith/SNES_stuff/3246b5854c91a5a2f44d1
 curl -fLO $B/ctrltest.sfc
 curl -fLO $B/ctrltest_auto.sfc
 curl -fLO $B/ctrltest_simple.sfc
+M=https://raw.githubusercontent.com/bbbradsmith/SNES_stuff/3246b5854c91a5a2f44d1569ead0aec0e211d930/multest
+curl -fLO $M/multest_mul16.sfc
+curl -fLO $M/multest_div16.sfc
+curl -fLO https://github.com/undisbeliever/snes-test-roms/releases/download/v20210217/snes-test-roms-20210217.zip
+unzip -j snes-test-roms-20210217.zip snes-test-roms/scpu-a-dma-bug-1.sfc snes-test-roms/inidisp_enable_display_mid_frame.sfc
+rm snes-test-roms-20210217.zip
 ```

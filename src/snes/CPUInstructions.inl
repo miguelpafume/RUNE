@@ -385,7 +385,6 @@ void CPU::instructionRTI() {
 // Family 8: interrupts and the rest
 
 // the byte after the opcode is a signature, fetching it makes the return address skip it
-// TODO: IRQ and NMI reuse this without the signature fetch, and with bit 4 of P clear
 template <U16 NATIVE_VECTOR, U16 EMULATION_VECTOR>
 void CPU::softwareInterrupt() {
 	fetch();
@@ -435,7 +434,6 @@ void CPU::blockMove() {
 }
 
 // the suite ends the case on the first halted cycle, step() does the ones after it
-// TODO: an IRQ also ends WAI, even with I set
 void CPU::instructionWAI() {
 	idleImplied();
 	idleImplied();

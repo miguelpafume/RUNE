@@ -36,6 +36,7 @@ void CPU::reset() {
 	m_registers.S = EMULATION_STACK_PAGE | LOW_BYTE_MASK;
 	m_registers.P = FLAG_M | FLAG_X | FLAG_I;
 	m_registers.E = true;
+	m_bus.setIrqDisable(true);
 	m_waiting = false;
 	m_stopped = false;
 
@@ -66,17 +67,28 @@ void CPU::step() {
 		return;
 	}
 
-	// The NMI waits for the current instruction to finish
-	if (m_bus.takeNmi()) {
+	// Interrupts wait for the current instruction to finish, and NMI goes before IRQ
+	if (m_bus.interruptPolled()) {
 		m_waiting = false;
-		hardwareInterrupt(VECTOR_NATIVE_NMI, VECTOR_EMULATION_NMI);
+
+		if (m_bus.takeNmi()) {
+			hardwareInterrupt(VECTOR_NATIVE_NMI, VECTOR_EMULATION_NMI);
+		} else {
+			hardwareInterrupt(VECTOR_NATIVE_IRQ, VECTOR_EMULATION_IRQ_BRK);
+		}
+
 		return;
 	}
 
 	// WAI: the clock keeps going but nothing is fetched
+	// An IRQ ends it even with I set, and then the next instruction runs
 	if (m_waiting) {
-		m_bus.haltedCycle();
-		return;
+		if (!m_bus.irqWakes()) {
+			m_bus.haltedCycle();
+			return;
+		}
+
+		m_waiting = false;
 	}
 
 	const bool flagM = flag(FLAG_M);
@@ -137,6 +149,9 @@ void CPU::setFlag(U8 mask, bool set) {
 	} else {
 		m_registers.P &= ~mask;
 	}
+
+	if (mask & FLAG_I)
+		m_bus.setIrqDisable(set);
 }
 
 // All writes to P go through here so the width rules are always applied
@@ -145,6 +160,7 @@ void CPU::setP(U8 value) {
 		value |= FLAG_M | FLAG_X; // set M and X to 8 bit
 
 	m_registers.P = value;
+	m_bus.setIrqDisable(value & FLAG_I);
 
 	// with 8bit index the high bytes for X and Y are lost
 	if (value & FLAG_X) {
