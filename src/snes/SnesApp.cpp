@@ -1,3 +1,8 @@
+#include "Buffer.hpp"
+#include "Model.hpp"
+#include "RenderSystem.hpp"
+#include "Util.hpp"
+
 #include "SnesApp.hpp"
 
 #include <algorithm>

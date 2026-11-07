@@ -41,4 +41,7 @@ struct CaseResult {
 
 CaseResult compareCase(const TestCase& testCase, const CPU::Registers& actualRegisters, const Bus& bus);
 
+// Uppercase hex with no $
+std::string toHex(U32 value);
+
 } // namespace SNES::HARNESS

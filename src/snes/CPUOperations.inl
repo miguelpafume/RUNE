@@ -33,25 +33,25 @@ void CPU::opLDY(Word<W8> value) {
 
 // STA, A cut to the M width
 template <bool W8>
-CPU::Word<W8> CPU::opSTA() {
+Word<W8> CPU::opSTA() {
 	return narrow<W8>(m_registers.A);
 }
 
 // STX, X cut to the X width
 template <bool W8>
-CPU::Word<W8> CPU::opSTX() {
+Word<W8> CPU::opSTX() {
 	return narrow<W8>(m_registers.X);
 }
 
 // STY, Y cut to the X width
 template <bool W8>
-CPU::Word<W8> CPU::opSTY() {
+Word<W8> CPU::opSTY() {
 	return narrow<W8>(m_registers.Y);
 }
 
 // STZ, writes zero with the M width
 template <bool W8>
-CPU::Word<W8> CPU::opSTZ() {
+Word<W8> CPU::opSTZ() {
 	return 0;
 }
 
@@ -208,7 +208,7 @@ void CPU::opSBC(Word<W8> value) {
 
 // INC, only N and Z change, C stays even when it wraps to zero
 template <bool W8>
-CPU::Word<W8> CPU::opINC(Word<W8> value) {
+Word<W8> CPU::opINC(Word<W8> value) {
 	const Word<W8> result = static_cast<Word<W8>>(value + 1);
 
 	setNZ<W8>(result);
@@ -218,7 +218,7 @@ CPU::Word<W8> CPU::opINC(Word<W8> value) {
 
 // DEC
 template <bool W8>
-CPU::Word<W8> CPU::opDEC(Word<W8> value) {
+Word<W8> CPU::opDEC(Word<W8> value) {
 	const Word<W8> result = static_cast<Word<W8>>(value - 1);
 
 	setNZ<W8>(result);
@@ -230,7 +230,7 @@ CPU::Word<W8> CPU::opDEC(Word<W8> value) {
 
 // ASL, shift left, bit 0 gets 0
 template <bool W8>
-CPU::Word<W8> CPU::opASL(Word<W8> value) {
+Word<W8> CPU::opASL(Word<W8> value) {
 	setFlag(FLAG_C, value & signBit<W8>());
 
 	const Word<W8> result = static_cast<Word<W8>>(value << 1);
@@ -242,7 +242,7 @@ CPU::Word<W8> CPU::opASL(Word<W8> value) {
 
 // LSR, shift right, the top bit gets 0 so N always ends clear
 template <bool W8>
-CPU::Word<W8> CPU::opLSR(Word<W8> value) {
+Word<W8> CPU::opLSR(Word<W8> value) {
 	setFlag(FLAG_C, value & 0x01);
 
 	const Word<W8> result = static_cast<Word<W8>>(value >> 1);
@@ -254,7 +254,7 @@ CPU::Word<W8> CPU::opLSR(Word<W8> value) {
 
 // ROL, rotate left, the old C goes into bit 0, carryIn is saved before C gets the new value
 template <bool W8>
-CPU::Word<W8> CPU::opROL(Word<W8> value) {
+Word<W8> CPU::opROL(Word<W8> value) {
 	const bool     carryIn = flag(FLAG_C);
 	const Word<W8> result = static_cast<Word<W8>>(value << 1 | carryIn);
 
@@ -266,7 +266,7 @@ CPU::Word<W8> CPU::opROL(Word<W8> value) {
 
 // ROR, rotate right, the old C goes into the top bit
 template <bool W8>
-CPU::Word<W8> CPU::opROR(Word<W8> value) {
+Word<W8> CPU::opROR(Word<W8> value) {
 	const bool     carryIn = flag(FLAG_C);
 	const Word<W8> result = static_cast<Word<W8>>(value >> 1 | (carryIn ? signBit<W8>() : 0));
 
@@ -280,7 +280,7 @@ CPU::Word<W8> CPU::opROR(Word<W8> value) {
 
 // TSB, sets in memory the bits that are set in A
 template <bool W8>
-CPU::Word<W8> CPU::opTSB(Word<W8> value) {
+Word<W8> CPU::opTSB(Word<W8> value) {
 	const Word<W8> mask = narrow<W8>(m_registers.A);
 
 	setFlag(FLAG_Z, (value & mask) == 0);
@@ -290,7 +290,7 @@ CPU::Word<W8> CPU::opTSB(Word<W8> value) {
 
 // TRB, clears in memory the bits that are set in A
 template <bool W8>
-CPU::Word<W8> CPU::opTRB(Word<W8> value) {
+Word<W8> CPU::opTRB(Word<W8> value) {
 	const Word<W8> mask = narrow<W8>(m_registers.A);
 
 	setFlag(FLAG_Z, (value & mask) == 0);

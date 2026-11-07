@@ -5,13 +5,50 @@
 #include "snes/Bus.hpp"
 
 #include <array>
+#include <concepts>
 #include <type_traits>
-
-using namespace RUNE;
 
 namespace SNES {
 
-// Ricoh 5A22 (65C816 core), all bus cycles go through Bus which moves the clock
+using RUNE::S32;
+using RUNE::S8;
+using RUNE::U16;
+using RUNE::U32;
+using RUNE::U8;
+
+// Masks for the address math
+using RUNE::ADDRESS_MASK;
+using RUNE::HIGH_BYTE_MASK;
+using RUNE::LOW_BYTE_MASK;
+using RUNE::OFFSET_MASK;
+using RUNE::PAGE_MASK;
+
+class CPU;
+
+// U8 when the width is 8 bit (M or X set), U16 otherwise
+template <bool W8>
+using Word = std::conditional_t<W8, U8, U16>;
+
+// Gives the address of byte k of an operand, the at* functions of the CPU return one
+// The result has to be exactly U32, a U16 would drop the bank without a warning
+template <typename L>
+concept Locator = std::invocable<L, U32> && std::same_as<std::invoke_result_t<L, U32>, U32>;
+
+// The three kinds of operation a pattern takes (CPUPatterns.inl)
+
+// Read: consumes the operand (LDA, ORA, CMP...)
+template <typename Op, bool W8>
+concept ReadOperation = std::same_as<Op, void (CPU::*)(Word<W8>)>;
+
+// Write: gives the value to store (STA, STZ...)
+template <typename Op, bool W8>
+concept WriteOperation = std::same_as<Op, Word<W8> (CPU::*)()>;
+
+// Modify: takes the old value and gives the new one (INC, ASL, TSB...)
+template <typename Op, bool W8>
+concept ModifyOperation = std::same_as<Op, Word<W8> (CPU::*)(Word<W8>)>;
+
+// Ricoh 5A22 (65C816 core)
 class CPU {
 public:
 	explicit CPU(Bus& bus);
@@ -81,10 +118,6 @@ private:
 
 	using Handler = void (CPU::*)();
 	using Table = std::array<Handler, 256>; // 256 opcodes
-
-	// U8 when the width is 8 bit (M or X set), U16 otherwise
-	template <bool W8>
-	using Word = std::conditional_t<W8, U8, U16>;
 
 	// Top bit for the width, used for the N flag
 	template <bool W8>
@@ -165,11 +198,11 @@ private:
 
 	// Single cycles
 
-	U8   read(U32 address, bool lock = false);
-	void write(U32 address, U8 value, bool lock = false);
+	U8   read(U32 address, bool memoryLock = false);
+	void write(U32 address, U8 value, bool memoryLock = false);
 
 	// no access, but the address still goes on the bus
-	void idle(U32 address, bool lock = false);
+	void idle(U32 address, bool memoryLock = false);
 
 	// on the next opcode address
 	void idleImplied();
@@ -231,19 +264,18 @@ private:
 
 	// Multi-byte accesses (one bus cycle per byte)
 
-	template <bool W8, typename Locator>
-	Word<W8> readAt(Locator at, bool lock = false);
+	template <bool W8>
+	Word<W8> readAt(Locator auto locator, bool memoryLock = false);
 
 	// low, high, bank
-	template <typename Locator>
-	U32 readLongPointer(Locator at);
+	U32 readLongPointer(Locator auto locator);
 
-	template <bool W8, typename Locator>
-	void writeAt(Locator at, Word<W8> value);
+	template <bool W8>
+	void writeAt(Locator auto locator, Word<W8> value);
 
 	// read, idle and write back, all with MLB low (family 6)
-	template <bool W8, auto Op, typename Locator>
-	void modifyAt(Locator at);
+	template <bool W8, ModifyOperation<W8> auto Op>
+	void modifyAt(Locator auto locator);
 
 	// CPUPatterns.inl: addressing patterns
 	// each pattern does the bus cycles of one addressing mode
@@ -251,136 +283,136 @@ private:
 	// Read -> Op consumes the operand
 
 	// #
-	template <bool W8, auto Op>
+	template <bool W8, ReadOperation<W8> auto Op>
 	void immediateRead();
 
 	// dp
-	template <bool W8, auto Op>
+	template <bool W8, ReadOperation<W8> auto Op>
 	void directRead();
 
 	// dp,X / dp,Y
-	template <bool W8, Index I, auto Op>
+	template <bool W8, Index I, ReadOperation<W8> auto Op>
 	void directIndexedRead();
 
 	// abs
-	template <bool W8, auto Op>
+	template <bool W8, ReadOperation<W8> auto Op>
 	void absoluteRead();
 
 	// abs,X / abs,Y, extra cycle with 16 bit index or a page cross
-	template <bool W8, bool X8, Index I, auto Op>
+	template <bool W8, bool X8, Index I, ReadOperation<W8> auto Op>
 	void absoluteIndexedRead();
 
 	// long
-	template <bool W8, auto Op>
+	template <bool W8, ReadOperation<W8> auto Op>
 	void absoluteLongRead();
 
 	// long,X
-	template <bool W8, auto Op>
+	template <bool W8, ReadOperation<W8> auto Op>
 	void absoluteLongIndexedRead();
 
 	// (dp)
-	template <bool W8, auto Op>
+	template <bool W8, ReadOperation<W8> auto Op>
 	void directIndirectRead();
 
 	// (dp,X)
-	template <bool W8, auto Op>
+	template <bool W8, ReadOperation<W8> auto Op>
 	void directIndexedIndirectRead();
 
 	// (dp),Y, same extra cycle rule as abs,Y
-	template <bool W8, bool X8, auto Op>
+	template <bool W8, bool X8, ReadOperation<W8> auto Op>
 	void directIndirectIndexedRead();
 
 	// [dp]
-	template <bool W8, auto Op>
+	template <bool W8, ReadOperation<W8> auto Op>
 	void directIndirectLongRead();
 
 	// [dp],Y
-	template <bool W8, auto Op>
+	template <bool W8, ReadOperation<W8> auto Op>
 	void directIndirectLongIndexedRead();
 
 	// sr,S
-	template <bool W8, auto Op>
+	template <bool W8, ReadOperation<W8> auto Op>
 	void stackRelativeRead();
 
 	// (sr,S),Y
-	template <bool W8, auto Op>
+	template <bool W8, ReadOperation<W8> auto Op>
 	void stackRelativeIndirectIndexedRead();
 
 	// Write -> Op gives the value
 	// same addresses as the reads, but the indexed ones always take the extra cycle
 
 	// dp
-	template <bool W8, auto Op>
+	template <bool W8, WriteOperation<W8> auto Op>
 	void directWrite();
 
 	// dp,X / dp,Y
-	template <bool W8, Index I, auto Op>
+	template <bool W8, Index I, WriteOperation<W8> auto Op>
 	void directIndexedWrite();
 
 	// abs
-	template <bool W8, auto Op>
+	template <bool W8, WriteOperation<W8> auto Op>
 	void absoluteWrite();
 
 	// abs,X / abs,Y
-	template <bool W8, Index I, auto Op>
+	template <bool W8, Index I, WriteOperation<W8> auto Op>
 	void absoluteIndexedWrite();
 
 	// long
-	template <bool W8, auto Op>
+	template <bool W8, WriteOperation<W8> auto Op>
 	void absoluteLongWrite();
 
 	// long,X
-	template <bool W8, auto Op>
+	template <bool W8, WriteOperation<W8> auto Op>
 	void absoluteLongIndexedWrite();
 
 	// (dp)
-	template <bool W8, auto Op>
+	template <bool W8, WriteOperation<W8> auto Op>
 	void directIndirectWrite();
 
 	// (dp,X)
-	template <bool W8, auto Op>
+	template <bool W8, WriteOperation<W8> auto Op>
 	void directIndexedIndirectWrite();
 
 	// (dp),Y
-	template <bool W8, auto Op>
+	template <bool W8, WriteOperation<W8> auto Op>
 	void directIndirectIndexedWrite();
 
 	// [dp]
-	template <bool W8, auto Op>
+	template <bool W8, WriteOperation<W8> auto Op>
 	void directIndirectLongWrite();
 
 	// [dp],Y
-	template <bool W8, auto Op>
+	template <bool W8, WriteOperation<W8> auto Op>
 	void directIndirectLongIndexedWrite();
 
 	// sr,S
-	template <bool W8, auto Op>
+	template <bool W8, WriteOperation<W8> auto Op>
 	void stackRelativeWrite();
 
 	// (sr,S),Y
-	template <bool W8, auto Op>
+	template <bool W8, WriteOperation<W8> auto Op>
 	void stackRelativeIndirectIndexedWrite();
 
 	// Modify -> Op changes the operand (family 6)
 
 	// A, X or Y (ASL A, INC A, INX, DEY...)
-	template <bool W8, Register R, auto Op>
+	template <bool W8, Register R, ModifyOperation<W8> auto Op>
 	void impliedModify();
 
 	// dp
-	template <bool W8, auto Op>
+	template <bool W8, ModifyOperation<W8> auto Op>
 	void directModify();
 
 	// dp,X
-	template <bool W8, auto Op>
+	template <bool W8, ModifyOperation<W8> auto Op>
 	void directIndexedModify();
 
 	// abs
-	template <bool W8, auto Op>
+	template <bool W8, ModifyOperation<W8> auto Op>
 	void absoluteModify();
 
 	// abs,X, the index cycle always happens
-	template <bool W8, auto Op>
+	template <bool W8, ModifyOperation<W8> auto Op>
 	void absoluteIndexedModify();
 
 	// CPUOperations.inl: opcodes

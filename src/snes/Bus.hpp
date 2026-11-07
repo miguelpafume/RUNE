@@ -10,7 +10,11 @@
 
 namespace SNES {
 
-using namespace RUNE;
+using RUNE::U16;
+using RUNE::U32;
+using RUNE::U32_MAX;
+using RUNE::U64;
+using RUNE::U8;
 
 class APU;
 class Cartridge;

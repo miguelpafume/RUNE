@@ -12,8 +12,9 @@
 namespace SNES {
 
 // The 65816 uses 24 address lines, so anything above bank $FF wraps
-constexpr U32         ADDRESS_MASK = 0xFFFFFF;
-constexpr std::size_t TEST_MEMORY_SIZE = 0xFFFFFF + 1; // 16 MB, flat
+using RUNE::ADDRESS_MASK;
+
+constexpr std::size_t TEST_MEMORY_SIZE = std::size_t {ADDRESS_MASK} + 1; // 16 MB, flat
 
 constexpr std::size_t EXPECTED_DIRTY_PER_CASE = 16;
 constexpr std::size_t EXPECTED_CYCLES_PER_CASE = 16;

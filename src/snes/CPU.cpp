@@ -190,7 +190,7 @@ void CPU::setNZ(Word<W8> value) {
 
 // Cuts the register down to the operand width
 template <bool W8>
-CPU::Word<W8> CPU::narrow(U16 value) {
+Word<W8> CPU::narrow(U16 value) {
 	return static_cast<Word<W8>>(value);
 }
 

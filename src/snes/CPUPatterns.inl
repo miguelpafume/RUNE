@@ -11,7 +11,7 @@ namespace SNES {
 // Read -> Op consumes the operand
 
 // Immediate, the operand comes right after the opcode (1 or 2 bytes)
-template <bool W8, auto Op>
+template <bool W8, ReadOperation<W8> auto Op>
 void CPU::immediateRead() {
 	Word<W8> value = fetch();
 
@@ -25,7 +25,7 @@ void CPU::immediateRead() {
 // Direct page
 
 // dp: D + offset
-template <bool W8, auto Op>
+template <bool W8, ReadOperation<W8> auto Op>
 void CPU::directRead() {
 	const U8 offset = fetch();
 	idleDirect();
@@ -34,7 +34,7 @@ void CPU::directRead() {
 }
 
 // dp,X and dp,Y always take one extra cycle to add the index
-template <bool W8, CPU::Index I, auto Op>
+template <bool W8, CPU::Index I, ReadOperation<W8> auto Op>
 void CPU::directIndexedRead() {
 	const U8 offset = fetch();
 	idleDirect();
@@ -46,7 +46,7 @@ void CPU::directIndexedRead() {
 // Absolute
 
 // abs: DB:address
-template <bool W8, auto Op>
+template <bool W8, ReadOperation<W8> auto Op>
 void CPU::absoluteRead() {
 	const U16 base = fetchWord();
 
@@ -54,7 +54,7 @@ void CPU::absoluteRead() {
 }
 
 // abs,X and abs,Y only take the extra cycle with 16 bit index or when crossing a page
-template <bool W8, bool X8, CPU::Index I, auto Op>
+template <bool W8, bool X8, CPU::Index I, ReadOperation<W8> auto Op>
 void CPU::absoluteIndexedRead() {
 	const U16 base = fetchWord();
 	const U16 offset = index<I>();
@@ -66,7 +66,7 @@ void CPU::absoluteIndexedRead() {
 }
 
 // long: the instruction has the full 24 bit address
-template <bool W8, auto Op>
+template <bool W8, ReadOperation<W8> auto Op>
 void CPU::absoluteLongRead() {
 	const U32 base = fetchLong();
 
@@ -74,7 +74,7 @@ void CPU::absoluteLongRead() {
 }
 
 // long,X: no extra cycle here
-template <bool W8, auto Op>
+template <bool W8, ReadOperation<W8> auto Op>
 void CPU::absoluteLongIndexedRead() {
 	const U32 address = fetchLong();
 
@@ -84,7 +84,7 @@ void CPU::absoluteLongIndexedRead() {
 // Indirect, the pointer is read from direct page and is always 16 or 24 bits (M and X don't matter)
 
 // (dp): 16 bit pointer, the value is in the data bank
-template <bool W8, auto Op>
+template <bool W8, ReadOperation<W8> auto Op>
 void CPU::directIndirectRead() {
 	const U8 offset = fetch();
 	idleDirect();
@@ -95,7 +95,7 @@ void CPU::directIndirectRead() {
 }
 
 // (dp,X): X gets added before reading the pointer, costs one cycle
-template <bool W8, auto Op>
+template <bool W8, ReadOperation<W8> auto Op>
 void CPU::directIndexedIndirectRead() {
 	const U8 offset = fetch();
 	idleDirect();
@@ -107,7 +107,7 @@ void CPU::directIndexedIndirectRead() {
 }
 
 // (dp),Y: Y gets added after reading the pointer, same extra cycle rule as abs,Y
-template <bool W8, bool X8, auto Op>
+template <bool W8, bool X8, ReadOperation<W8> auto Op>
 void CPU::directIndirectIndexedRead() {
 	const U8 offset = fetch();
 	idleDirect();
@@ -121,7 +121,7 @@ void CPU::directIndirectIndexedRead() {
 }
 
 // [dp]: 24 bit pointer, no page wrap even in emulation
-template <bool W8, auto Op>
+template <bool W8, ReadOperation<W8> auto Op>
 void CPU::directIndirectLongRead() {
 	const U8 offset = fetch();
 	idleDirect();
@@ -132,7 +132,7 @@ void CPU::directIndirectLongRead() {
 }
 
 // [dp],Y: same as [dp] plus Y, no extra cycle
-template <bool W8, auto Op>
+template <bool W8, ReadOperation<W8> auto Op>
 void CPU::directIndirectLongIndexedRead() {
 	const U8 offset = fetch();
 	idleDirect();
@@ -145,7 +145,7 @@ void CPU::directIndirectLongIndexedRead() {
 // Stack relative
 
 // sr,S: S + offset, one cycle to do the sum
-template <bool W8, auto Op>
+template <bool W8, ReadOperation<W8> auto Op>
 void CPU::stackRelativeRead() {
 	const U8 offset = fetch();
 	idle(lastFetchAddress());
@@ -155,7 +155,7 @@ void CPU::stackRelativeRead() {
 
 // (sr,S),Y: pointer is on the stack, then Y is added
 // the second idle always happens, on the address of the pointer's last byte
-template <bool W8, auto Op>
+template <bool W8, ReadOperation<W8> auto Op>
 void CPU::stackRelativeIndirectIndexedRead() {
 	const U8 offset = fetch();
 	idle(lastFetchAddress());
@@ -172,7 +172,7 @@ void CPU::stackRelativeIndirectIndexedRead() {
 // Direct page
 
 // dp
-template <bool W8, auto Op>
+template <bool W8, WriteOperation<W8> auto Op>
 void CPU::directWrite() {
 	const U8 offset = fetch();
 	idleDirect();
@@ -181,7 +181,7 @@ void CPU::directWrite() {
 }
 
 // dp,X and dp,Y
-template <bool W8, CPU::Index I, auto Op>
+template <bool W8, CPU::Index I, WriteOperation<W8> auto Op>
 void CPU::directIndexedWrite() {
 	const U8 offset = fetch();
 	idleDirect();
@@ -193,7 +193,7 @@ void CPU::directIndexedWrite() {
 // Absolute
 
 // abs
-template <bool W8, auto Op>
+template <bool W8, WriteOperation<W8> auto Op>
 void CPU::absoluteWrite() {
 	const U16 base = fetchWord();
 
@@ -201,7 +201,7 @@ void CPU::absoluteWrite() {
 }
 
 // abs,X and abs,Y: extra cycle always
-template <bool W8, CPU::Index I, auto Op>
+template <bool W8, CPU::Index I, WriteOperation<W8> auto Op>
 void CPU::absoluteIndexedWrite() {
 	const U16 base = fetchWord();
 	const U16 offset = index<I>();
@@ -212,7 +212,7 @@ void CPU::absoluteIndexedWrite() {
 }
 
 // long
-template <bool W8, auto Op>
+template <bool W8, WriteOperation<W8> auto Op>
 void CPU::absoluteLongWrite() {
 	const U32 address = fetchLong();
 
@@ -220,7 +220,7 @@ void CPU::absoluteLongWrite() {
 }
 
 // long,X
-template <bool W8, auto Op>
+template <bool W8, WriteOperation<W8> auto Op>
 void CPU::absoluteLongIndexedWrite() {
 	const U32 address = fetchLong();
 
@@ -230,7 +230,7 @@ void CPU::absoluteLongIndexedWrite() {
 // Indirect
 
 // (dp)
-template <bool W8, auto Op>
+template <bool W8, WriteOperation<W8> auto Op>
 void CPU::directIndirectWrite() {
 	const U8 offset = fetch();
 	idleDirect();
@@ -241,7 +241,7 @@ void CPU::directIndirectWrite() {
 }
 
 // (dp,X)
-template <bool W8, auto Op>
+template <bool W8, WriteOperation<W8> auto Op>
 void CPU::directIndexedIndirectWrite() {
 	const U8 offset = fetch();
 	idleDirect();
@@ -253,7 +253,7 @@ void CPU::directIndexedIndirectWrite() {
 }
 
 // (dp),Y: extra cycle always
-template <bool W8, auto Op>
+template <bool W8, WriteOperation<W8> auto Op>
 void CPU::directIndirectIndexedWrite() {
 	const U8 offset = fetch();
 	idleDirect();
@@ -265,7 +265,7 @@ void CPU::directIndirectIndexedWrite() {
 }
 
 // [dp]
-template <bool W8, auto Op>
+template <bool W8, WriteOperation<W8> auto Op>
 void CPU::directIndirectLongWrite() {
 	const U8 offset = fetch();
 	idleDirect();
@@ -276,7 +276,7 @@ void CPU::directIndirectLongWrite() {
 }
 
 // [dp],Y
-template <bool W8, auto Op>
+template <bool W8, WriteOperation<W8> auto Op>
 void CPU::directIndirectLongIndexedWrite() {
 	const U8 offset = fetch();
 	idleDirect();
@@ -289,7 +289,7 @@ void CPU::directIndirectLongIndexedWrite() {
 // Stack relative
 
 // sr,S
-template <bool W8, auto Op>
+template <bool W8, WriteOperation<W8> auto Op>
 void CPU::stackRelativeWrite() {
 	const U8 offset = fetch();
 	idle(lastFetchAddress());
@@ -298,7 +298,7 @@ void CPU::stackRelativeWrite() {
 }
 
 // (sr,S),Y
-template <bool W8, auto Op>
+template <bool W8, WriteOperation<W8> auto Op>
 void CPU::stackRelativeIndirectIndexedWrite() {
 	const U8 offset = fetch();
 	idle(lastFetchAddress());
@@ -313,7 +313,7 @@ void CPU::stackRelativeIndirectIndexedWrite() {
 // The read, the internal cycle and the write are in modifyAt
 
 // A, X or Y: no memory, only the implied cycle
-template <bool W8, CPU::Register R, auto Op>
+template <bool W8, CPU::Register R, ModifyOperation<W8> auto Op>
 void CPU::impliedModify() {
 	idleImplied();
 
@@ -324,7 +324,7 @@ void CPU::impliedModify() {
 // Direct page
 
 // dp
-template <bool W8, auto Op>
+template <bool W8, ModifyOperation<W8> auto Op>
 void CPU::directModify() {
 	const U8 offset = fetch();
 	idleDirect();
@@ -333,7 +333,7 @@ void CPU::directModify() {
 }
 
 // dp,X
-template <bool W8, auto Op>
+template <bool W8, ModifyOperation<W8> auto Op>
 void CPU::directIndexedModify() {
 	const U8 offset = fetch();
 	idleDirect();
@@ -345,7 +345,7 @@ void CPU::directIndexedModify() {
 // Absolute
 
 // abs
-template <bool W8, auto Op>
+template <bool W8, ModifyOperation<W8> auto Op>
 void CPU::absoluteModify() {
 	const U16 base = fetchWord();
 
@@ -353,7 +353,7 @@ void CPU::absoluteModify() {
 }
 
 // abs,X: extra cycle always, like the writes
-template <bool W8, auto Op>
+template <bool W8, ModifyOperation<W8> auto Op>
 void CPU::absoluteIndexedModify() {
 	const U16 base = fetchWord();
 	idle(bankAddress(uncorrectedAddress(base, m_registers.X)));

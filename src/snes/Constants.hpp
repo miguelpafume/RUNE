@@ -4,7 +4,7 @@
 
 namespace SNES {
 
-using namespace RUNE;
+using RUNE::U32;
 
 // NTSC master clock
 constexpr U32 MASTER_CLOCK_HZ = 21477272;

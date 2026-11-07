@@ -15,7 +15,7 @@ std::string toHex(U32 value) {
 	return out.str();
 }
 
-std::string formatFlags(U8 p) {
+static std::string formatFlags(U8 p) {
 	std::string text(FLAG_NAMES.size(), '-');
 
 	for (std::size_t bit = 0; bit < FLAG_NAMES.size(); bit++) {
@@ -29,7 +29,7 @@ std::string formatFlags(U8 p) {
 	return text;
 }
 
-void pinsFromCycleKind(Bus::CycleKind kind, bool& vda, bool& vpa, bool& vpb) {
+static void pinsFromCycleKind(Bus::CycleKind kind, bool& vda, bool& vpa, bool& vpb) {
 	vda = false;
 	vpa = false;
 	vpb = false;
@@ -54,7 +54,7 @@ void pinsFromCycleKind(Bus::CycleKind kind, bool& vda, bool& vpa, bool& vpb) {
 	}
 }
 
-std::string formatPins(bool vda, bool vpa, bool vpb, bool isWrite, bool emulation, bool flagM, bool flagX, bool memoryLock) {
+static std::string formatPins(bool vda, bool vpa, bool vpb, bool isWrite, bool emulation, bool flagM, bool flagX, bool memoryLock) {
 	std::string text {};
 
 	text += vda ? 'd' : '-';
@@ -70,16 +70,16 @@ std::string formatPins(bool vda, bool vpa, bool vpb, bool isWrite, bool emulatio
 }
 
 template <typename T>
-std::string formatValue(const std::optional<T>& value) {
+static std::string formatValue(const std::optional<T>& value) {
 	return value ? toHex(static_cast<U32>(*value)) : std::string {"--"};
 }
 
-std::string formatCycleEntry(const CycleEntry& cycle) {
+static std::string formatCycleEntry(const CycleEntry& cycle) {
 	return "$" + formatValue(cycle.address) + " " + formatValue(cycle.value) + " " +
 	       formatPins(cycle.vda, cycle.vpa, cycle.vpb, cycle.isWrite, cycle.emulation, cycle.flagM, cycle.flagX, cycle.memoryLock);
 }
 
-std::string formatAccess(const Bus::Access& access) {
+static std::string formatAccess(const Bus::Access& access) {
 	bool vda {};
 	bool vpa {};
 	bool vpb {};
@@ -90,7 +90,7 @@ std::string formatAccess(const Bus::Access& access) {
 	       formatPins(vda, vpa, vpb, access.isWrite, access.emulation, access.flagM, access.flagX, access.memoryLock);
 }
 
-std::vector<FieldMismatch> compareRegisters(const CPU::Registers& expected, const CPU::Registers& actual) {
+static std::vector<FieldMismatch> compareRegisters(const CPU::Registers& expected, const CPU::Registers& actual) {
 	std::vector<FieldMismatch> mismatches {};
 
 	const auto check = [&](const char* field, auto expectedValue, auto actualValue) {
@@ -116,7 +116,7 @@ std::vector<FieldMismatch> compareRegisters(const CPU::Registers& expected, cons
 	return mismatches;
 }
 
-std::vector<MemoryMismatch> compareMemory(const std::vector<MemoryCell>& expected, const Bus& bus) {
+static std::vector<MemoryMismatch> compareMemory(const std::vector<MemoryCell>& expected, const Bus& bus) {
 	std::vector<MemoryMismatch> mismatches {};
 
 	for (const auto& cell : expected) {
@@ -130,7 +130,7 @@ std::vector<MemoryMismatch> compareMemory(const std::vector<MemoryCell>& expecte
 	return mismatches;
 }
 
-std::vector<AccessMismatch> compareAccesses(const std::vector<CycleEntry>& expected, const std::vector<Bus::Access>& actual) {
+static std::vector<AccessMismatch> compareAccesses(const std::vector<CycleEntry>& expected, const std::vector<Bus::Access>& actual) {
 	std::vector<AccessMismatch> mismatches {};
 
 	const std::size_t count = std::max(expected.size(), actual.size());

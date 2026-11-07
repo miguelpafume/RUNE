@@ -11,7 +11,6 @@
 #include <iostream>
 #include <map>
 #include <optional>
-#include <sstream>
 #include <string>
 #include <vector>
 
@@ -38,20 +37,14 @@ struct FileKey {
 	char        mode {};   // 'e' or 'n'
 };
 
-std::string toLower(const std::string& text) {
+static std::string toLower(const std::string& text) {
 	std::string out = text;
 	std::transform(out.begin(), out.end(), out.begin(), [](unsigned char c) { return std::tolower(c); });
 	return out;
 }
 
-std::string toHex(U32 value) {
-	std::ostringstream out {};
-	out << std::hex << std::uppercase << value;
-	return out.str();
-}
-
 // "3d.e.json" -> opcode "3d", mode 'e'
-std::optional<FileKey> parseFileName(const std::string& fileName) {
+static std::optional<FileKey> parseFileName(const std::string& fileName) {
 	const size_t dot = fileName.find('.');
 
 	if (dot == std::string::npos || dot + 1 >= fileName.size()) {
@@ -65,7 +58,7 @@ std::optional<FileKey> parseFileName(const std::string& fileName) {
 	return key;
 }
 
-bool matchesFilter(const std::string& fileName, const FileKey& key, const std::string& filter) {
+static bool matchesFilter(const std::string& fileName, const FileKey& key, const std::string& filter) {
 	if (filter.empty())
 		return true;
 
@@ -75,9 +68,9 @@ bool matchesFilter(const std::string& fileName, const FileKey& key, const std::s
 	return toLower(key.opcode) == toLower(filter);
 }
 
-ModeScore& scoreFor(OpcodeSummary& summary, char mode) { return mode == 'e' ? summary.emulation : summary.native; }
+static ModeScore& scoreFor(OpcodeSummary& summary, char mode) { return mode == 'e' ? summary.emulation : summary.native; }
 
-CaseResult runCase(Bus& bus, CPU& cpu, const TestCase& testCase) {
+static CaseResult runCase(Bus& bus, CPU& cpu, const TestCase& testCase) {
 	bus.beginCase();
 
 	for (const auto& cell : testCase.initial.ram) {
@@ -105,7 +98,7 @@ CaseResult runCase(Bus& bus, CPU& cpu, const TestCase& testCase) {
 	return compareCase(testCase, cpu.getRegisters(), bus);
 }
 
-void printDiagnostic(const CaseResult& result) {
+static void printDiagnostic(const CaseResult& result) {
 	std::cout << "FAIL " << result.name << "\n\n";
 
 	std::cout << "Registers:\n";
@@ -124,7 +117,7 @@ void printDiagnostic(const CaseResult& result) {
 	}
 }
 
-void printSummary(const std::map<std::string, OpcodeSummary>& summaries) {
+static void printSummary(const std::map<std::string, OpcodeSummary>& summaries) {
 	ModeScore totalE {};
 	ModeScore totalN {};
 

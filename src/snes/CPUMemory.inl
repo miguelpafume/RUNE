@@ -38,12 +38,12 @@ U32 CPU::fetchLong() {
 
 // Single Cycles
 
-U8 CPU::read(U32 address, bool lock) { return m_bus.readData(address, lock); }
+U8 CPU::read(U32 address, bool memoryLock) { return m_bus.readData(address, memoryLock); }
 
-void CPU::write(U32 address, U8 value, bool lock) { m_bus.writeData(address, value, lock); }
+void CPU::write(U32 address, U8 value, bool memoryLock) { m_bus.writeData(address, value, memoryLock); }
 
 // Internal cycle, no access but the bus still has an address and the clock runs
-void CPU::idle(U32 address, bool lock) { m_bus.internalCycle(address, lock); }
+void CPU::idle(U32 address, bool memoryLock) { m_bus.internalCycle(address, memoryLock); }
 
 // Single byte instructions put the next opcode address on the bus during their internal cycle
 void CPU::idleImplied() { idle(programAddress()); }
@@ -165,56 +165,55 @@ auto CPU::atProgramBank(U32 address) const {
 
 // Multi-byte accesses
 
-// Low byte first, with 16 bit it also reads at(1)
-template <bool W8, typename Locator>
-CPU::Word<W8> CPU::readAt(Locator at, bool lock) {
-	Word<W8> value = read(at(0), lock);
+// Low byte first, with 16 bit it also reads locator(1)
+template <bool W8>
+Word<W8> CPU::readAt(Locator auto locator, bool memoryLock) {
+	Word<W8> value = read(locator(0), memoryLock);
 
 	if constexpr (!W8)
-		value |= static_cast<U16>(read(at(1), lock) << 8);
+		value |= static_cast<U16>(read(locator(1), memoryLock) << 8);
 
 	return value;
 }
 
 // 24 bit pointer for the [dp] modes (low, high, bank)
-template <typename Locator>
-U32 CPU::readLongPointer(Locator at) {
-	const U32 low = read(at(0));
-	const U32 high = read(at(1));
-	const U32 bank = read(at(2));
+U32 CPU::readLongPointer(Locator auto locator) {
+	const U32 low = read(locator(0));
+	const U32 high = read(locator(1));
+	const U32 bank = read(locator(2));
 
 	return bank << 16 | high << 8 | low;
 }
 
 // Same order as readAt
-template <bool W8, typename Locator>
-void CPU::writeAt(Locator at, Word<W8> value) {
-	write(at(0), static_cast<U8>(value));
+template <bool W8>
+void CPU::writeAt(Locator auto locator, Word<W8> value) {
+	write(locator(0), static_cast<U8>(value));
 
 	if constexpr (!W8) {
-		write(at(1), static_cast<U8>(value >> 8));
+		write(locator(1), static_cast<U8>(value >> 8));
 	}
 }
 
 // Read-modify-write, every cycle here keeps MLB low
 // In emulation the internal cycle writes the old value back, like the 6502
-template <bool W8, auto Op, typename Locator>
-void CPU::modifyAt(Locator at) {
-	Word<W8> value = readAt<W8>(at, LOCK);
+template <bool W8, ModifyOperation<W8> auto Op>
+void CPU::modifyAt(Locator auto locator) {
+	Word<W8> value = readAt<W8>(locator, LOCK);
 
 	if (m_registers.E) {
-		m_bus.invalidWrite(at(0), static_cast<U8>(value), LOCK);
+		m_bus.invalidWrite(locator(0), static_cast<U8>(value), LOCK);
 	} else {
-		idle(at(W8 ? 0 : 1), LOCK);
+		idle(locator(W8 ? 0 : 1), LOCK);
 	}
 
 	value = (this->*Op)(value);
 
 	// High byte first, the opposite of writeAt
 	if constexpr (!W8)
-		write(at(1), static_cast<U8>(value >> 8), LOCK);
+		write(locator(1), static_cast<U8>(value >> 8), LOCK);
 
-	write(at(0), static_cast<U8>(value), LOCK);
+	write(locator(0), static_cast<U8>(value), LOCK);
 }
 
 } // namespace SNES

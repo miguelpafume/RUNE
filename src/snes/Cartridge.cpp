@@ -53,9 +53,9 @@ constexpr U8 CART_TYPE_COPROCESSOR = 0x03;
 
 constexpr std::size_t LOROM_RAM_A_MAX_ROM = 0x200000;
 
-U16 readWord(const std::vector<U8>& data, std::size_t offset) { return static_cast<U16>(data[offset] | data[offset + 1] << 8); }
+static U16 readWord(const std::vector<U8>& data, std::size_t offset) { return static_cast<U16>(data[offset] | data[offset + 1] << 8); }
 
-int opcodeScore(U8 opcode) {
+static int opcodeScore(U8 opcode) {
 	switch (opcode) {
 	case 0x78 : // SEI
 	case 0x18 : // CLC (CLC; XCE)
@@ -121,6 +121,10 @@ const char* coprocessorName(U8 type) {
 	}
 }
 
+static bool isPalDestination(U8 destination) {
+	return (destination >= 0x02 && destination <= 0x0C) || destination == 0x11 || destination == 0x12;
+}
+
 Cartridge::Cartridge(std::vector<U8> image) : m_rom {std::move(image)} {
 	stripCopierHeader();
 	checkSize();
@@ -183,10 +187,6 @@ int Cartridge::scoreHeader(std::size_t base) const {
 	}
 
 	return score < 0 ? 0 : score;
-}
-
-bool isPalDestination(U8 destination) {
-	return (destination >= 0x02 && destination <= 0x0C) || destination == 0x11 || destination == 0x12;
 }
 
 void Cartridge::readHeader() {
