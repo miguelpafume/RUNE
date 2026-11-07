@@ -243,7 +243,7 @@ Word<W8> CPU::opASL(Word<W8> value) {
 // LSR, shift right, the top bit gets 0 so N always ends clear
 template <bool W8>
 Word<W8> CPU::opLSR(Word<W8> value) {
-	setFlag(FLAG_C, value & 0x01);
+	setFlag(FLAG_C, bit<0>(value));
 
 	const Word<W8> result = static_cast<Word<W8>>(value >> 1);
 
@@ -270,7 +270,7 @@ Word<W8> CPU::opROR(Word<W8> value) {
 	const bool     carryIn = flag(FLAG_C);
 	const Word<W8> result = static_cast<Word<W8>>(value >> 1 | (carryIn ? signBit<W8>() : 0));
 
-	setFlag(FLAG_C, value & 0x01);
+	setFlag(FLAG_C, bit<0>(value));
 	setNZ<W8>(result);
 
 	return result;

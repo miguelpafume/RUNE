@@ -62,25 +62,25 @@ constexpr U16 RDVRAML = 0x2139;
 constexpr U16 RDVRAMH = 0x213A;
 constexpr U16 RDCGRAM = 0x213B;
 
-constexpr U8 INIDISP_FORCED_BLANK = 0x80;
-constexpr U8 INIDISP_BRIGHTNESS_MASK = 0x0F;
+constexpr U8 INIDISP_FORCED_BLANK = mask<7>;
+constexpr U8 INIDISP_BRIGHTNESS_MASK = mask<0, 3>;
 
-constexpr U8 OAMADDH_PRIORITY_ROTATION = 0x80;
+constexpr U8 OAMADDH_PRIORITY_ROTATION = mask<7>;
 
-constexpr U8 BGMODE_BG3_ON_TOP = 0x08;
+constexpr U8 BGMODE_BG3_ON_TOP = mask<3>;
 
-constexpr U8 LAYER_BITS = 0x1F;      // BG1-BG4 and sprites, in $212C-$212F
-constexpr U8 MATH_LAYER_BITS = 0x3F; // the same plus the backdrop, in $2131
+constexpr U8 LAYER_BITS = mask<0, 4>;      // BG1-BG4 and sprites, in $212C-$212F
+constexpr U8 MATH_LAYER_BITS = mask<0, 5>; // the same plus the backdrop, in $2131
 
-constexpr U8 CGWSEL_DIRECT_COLOR = 0x01;
-constexpr U8 CGWSEL_ADD_SUB_SCREEN = 0x02;
-constexpr U8 CGADDSUB_HALF = 0x40;
-constexpr U8 CGADDSUB_SUBTRACT = 0x80;
+constexpr U8 CGWSEL_DIRECT_COLOR = mask<0>;
+constexpr U8 CGWSEL_ADD_SUB_SCREEN = mask<1>;
+constexpr U8 CGADDSUB_HALF = mask<6>;
+constexpr U8 CGADDSUB_SUBTRACT = mask<7>;
 
-constexpr U8  COLDATA_RED = 0x20;
-constexpr U8  COLDATA_GREEN = 0x40;
-constexpr U8  COLDATA_BLUE = 0x80;
-constexpr U16 COLOR_CHANNEL_MASK = 0x1F;
+constexpr U8  COLDATA_RED = mask<5>;
+constexpr U8  COLDATA_GREEN = mask<6>;
+constexpr U8  COLDATA_BLUE = mask<7>;
+constexpr U16 COLOR_CHANNEL_MASK = mask<0, 4>;
 
 // Layer numbers. They are also the bits of $212C-$212F and $2131, and the index of m_windows
 constexpr U32 SPRITE_LAYER = 4;
@@ -88,18 +88,18 @@ constexpr U32 BACKDROP_LAYER = 5;
 constexpr U32 COLOR_WINDOW = 5;
 constexpr U32 SPRITE_NO_MATH_LAYER = 6; // sprites with palettes 0-3, color math skips them
 
-constexpr U8 VMAIN_INCREMENT_ON_HIGH = 0x80;
+constexpr U8 VMAIN_INCREMENT_ON_HIGH = mask<7>;
 
-constexpr U16 VRAM_ADDRESS_MASK = 0x7FFF;
-constexpr U16 SCROLL_MASK = 0x3FF;
+constexpr U16 VRAM_ADDRESS_MASK = mask<0, 14>;
+constexpr U16 SCROLL_MASK = mask<0, 9>;
 
 // Bits of one tilemap entry
-constexpr U16 MAP_FLIP_Y = 0x8000;
-constexpr U16 MAP_FLIP_X = 0x4000;
-constexpr U16 MAP_PRIORITY = 0x2000;
-constexpr U16 MAP_TILE_MASK = 0x03FF;
+constexpr U16 MAP_FLIP_Y = mask<15>;
+constexpr U16 MAP_FLIP_X = mask<14>;
+constexpr U16 MAP_PRIORITY = mask<13>;
+constexpr U16 MAP_TILE_MASK = mask<0, 9>;
 
-constexpr U16 OAM_ADDRESS_MASK = 0x3FF;
+constexpr U16 OAM_ADDRESS_MASK = mask<0, 9>;
 constexpr U16 OAM_HIGH_TABLE = 0x200;
 
 constexpr U32 SPRITE_COUNT = 128;
@@ -115,6 +115,9 @@ constexpr std::array<U32, 8> LARGE_WIDTHS {16, 32, 64, 32, 64, 64, 32, 32};
 constexpr std::array<U32, 8> LARGE_HEIGHTS {16, 32, 64, 32, 64, 64, 64, 32};
 
 // Same moment as the fast PPU of bsnes. A write after this only shows on the next line
+// One dot shorter in odd frames
+constexpr U32 SHORT_SCANLINE = 240;
+
 constexpr U32 RENDER_POSITION = 512;
 
 // How many words the address moves per access, $2115 bits 0-1
@@ -151,7 +154,7 @@ void PPU::advance(U32 cycles) {
 }
 
 // The high table is only 32 bytes, repeated over the whole upper half of the address
-static U16 oamIndex(U16 address) { return (address & OAM_HIGH_TABLE) ? (OAM_HIGH_TABLE | (address & 0x1F)) : address; }
+static U16 oamIndex(U16 address) { return (address & OAM_HIGH_TABLE) ? (OAM_HIGH_TABLE | bits<0, 4>(address)) : address; }
 
 U8 PPU::readRegister(U16 address, U8 openBus) {
 	switch (address) {
@@ -215,9 +218,10 @@ void PPU::writeRegister(U16 address, U8 value) {
 		break;
 
 	case OBSEL :
-		m_spriteTileAddress = (value << 13) & 0x6000;
-		m_spriteNameGap = (value >> 3) & 0x03;
-		m_spriteSize = (value >> 5) & 0x07;
+		// The documentation says bits 0-2, but VRAM addresses have 15 bits and bit 2 would land on bit 15
+		m_spriteTileAddress = bits<0, 1>(value) << 13;
+		m_spriteNameGap = bits<3, 4>(value);
+		m_spriteSize = bits<5, 7>(value);
 		break;
 
 	// The register counts in words, the address inside counts in bytes
@@ -227,7 +231,7 @@ void PPU::writeRegister(U16 address, U8 value) {
 		break;
 
 	case OAMADDH :
-		m_oamBaseAddress = static_cast<U16>(((value & 0x01) << 9) | (m_oamBaseAddress & 0x01FE));
+		m_oamBaseAddress = static_cast<U16>((bits<0>(value) << 9) | (m_oamBaseAddress & 0x01FE));
 		m_oamPriorityRotation = (value & OAMADDH_PRIORITY_ROTATION) != 0;
 		m_oamAddress = m_oamBaseAddress;
 		break;
@@ -252,7 +256,7 @@ void PPU::writeRegister(U16 address, U8 value) {
 	}
 
 	case BGMODE :
-		m_bgMode = value & 0x07;
+		m_bgMode = bits<0, 2>(value);
 		m_bg3OnTop = (value & BGMODE_BG3_ON_TOP) != 0;
 
 		for (U32 layer = 0; layer < m_backgrounds.size(); layer++) {
@@ -263,7 +267,7 @@ void PPU::writeRegister(U16 address, U8 value) {
 	case MOSAIC : {
 		const bool wasOn = m_mosaicLayers != 0;
 
-		m_mosaicLayers = value & 0x0F;
+		m_mosaicLayers = bits<0, 3>(value);
 		m_mosaicSize = (value >> 4) + 1u;
 
 		// The line counter starts over when mosaic turns on
@@ -279,19 +283,19 @@ void PPU::writeRegister(U16 address, U8 value) {
 	case BG4SC : {
 		Background& background = m_backgrounds[address - BG1SC];
 
-		background.mapSize = value & 0x03;
-		background.mapAddress = (value << 8) & 0x7C00;
+		background.mapSize = bits<0, 1>(value);
+		background.mapAddress = bits<2, 6>(value) << 10;
 		break;
 	}
 
 	case BG12NBA :
-		m_backgrounds[0].tileAddress = (value << 12) & 0x7000;
-		m_backgrounds[1].tileAddress = (value << 8) & 0x7000;
+		m_backgrounds[0].tileAddress = bits<0, 2>(value) << 12;
+		m_backgrounds[1].tileAddress = bits<4, 6>(value) << 12;
 		break;
 
 	case BG34NBA :
-		m_backgrounds[2].tileAddress = (value << 12) & 0x7000;
-		m_backgrounds[3].tileAddress = (value << 8) & 0x7000;
+		m_backgrounds[2].tileAddress = bits<0, 2>(value) << 12;
+		m_backgrounds[3].tileAddress = bits<4, 6>(value) << 12;
 		break;
 
 	// Each one takes two writes. The new byte is the high part, the low part comes from the last write to any of them
@@ -314,8 +318,8 @@ void PPU::writeRegister(U16 address, U8 value) {
 		break;
 
 	case VMAIN :
-		m_vramIncrement = VRAM_INCREMENTS[value & 0x03];
-		m_vramRemap = (value >> 2) & 0x03;
+		m_vramIncrement = VRAM_INCREMENTS[bits<0, 1>(value)];
+		m_vramRemap = bits<2, 3>(value);
 		m_vramIncrementOnHigh = (value & VMAIN_INCREMENT_ON_HIGH) != 0;
 		break;
 
@@ -363,7 +367,7 @@ void PPU::writeRegister(U16 address, U8 value) {
 		if (!m_cgramHighByte) {
 			m_cgramLatch = value;
 		} else {
-			m_cgram[m_cgramAddress] = static_cast<U16>((value & 0x7F) << 8 | m_cgramLatch);
+			m_cgram[m_cgramAddress] = static_cast<U16>(bits<0, 6>(value) << 8 | m_cgramLatch);
 			m_cgramAddress++;
 		}
 
@@ -378,12 +382,12 @@ void PPU::writeRegister(U16 address, U8 value) {
 
 		for (U32 half = 0; half < 2; half++) {
 			Window&   window = m_windows[first + half];
-			const U32 bits = value >> (half * 4);
+			const U32 setting = value >> (half * 4);
 
-			window.oneInverted = (bits & 0x01) != 0;
-			window.oneEnabled = (bits & 0x02) != 0;
-			window.twoInverted = (bits & 0x04) != 0;
-			window.twoEnabled = (bits & 0x08) != 0;
+			window.oneInverted = bit<0>(setting);
+			window.oneEnabled = bit<1>(setting);
+			window.twoInverted = bit<2>(setting);
+			window.twoEnabled = bit<3>(setting);
 		}
 		break;
 	}
@@ -411,8 +415,8 @@ void PPU::writeRegister(U16 address, U8 value) {
 		break;
 
 	case WOBJLOG :
-		m_windows[SPRITE_LAYER].logic = value & 0x03;
-		m_windows[COLOR_WINDOW].logic = (value >> 2) & 0x03;
+		m_windows[SPRITE_LAYER].logic = bits<0, 1>(value);
+		m_windows[COLOR_WINDOW].logic = bits<2, 3>(value);
 		break;
 
 	case TM :
@@ -434,8 +438,8 @@ void PPU::writeRegister(U16 address, U8 value) {
 	case CGWSEL :
 		m_directColor = (value & CGWSEL_DIRECT_COLOR) != 0;
 		m_addSubScreen = (value & CGWSEL_ADD_SUB_SCREEN) != 0;
-		m_mathWindow = (value >> 4) & 0x03;
-		m_clipToBlack = (value >> 6) & 0x03;
+		m_mathWindow = bits<4, 5>(value);
+		m_clipToBlack = bits<6, 7>(value);
 		break;
 
 	case CGADDSUB :
@@ -473,13 +477,13 @@ U16 PPU::vramIndex() const {
 
 	switch (m_vramRemap) {
 	case 1 :
-		return static_cast<U16>((address & 0x7F00) | ((address << 3) & 0x00F8) | ((address >> 5) & 0x07));
+		return static_cast<U16>((address & mask<8, 14>) | bits<0, 4>(address) << 3 | bits<5, 7>(address));
 
 	case 2 :
-		return static_cast<U16>((address & 0x7E00) | ((address << 3) & 0x01F8) | ((address >> 6) & 0x07));
+		return static_cast<U16>((address & mask<9, 14>) | bits<0, 5>(address) << 3 | bits<6, 8>(address));
 
 	case 3 :
-		return static_cast<U16>((address & 0x7C00) | ((address << 3) & 0x03F8) | ((address >> 7) & 0x07));
+		return static_cast<U16>((address & mask<10, 14>) | bits<0, 6>(address) << 3 | bits<7, 9>(address));
 
 	default :
 		return address;
@@ -501,9 +505,9 @@ static U8 outputChannel(U32 channel, U32 brightness) {
 
 // The 8 bits of the pixel are BBGGGRRR, and the 3 palette bits add one more low bit to each channel
 static U16 directColor(U32 palette, U32 color) {
-	const U32 red = (color & 0x07) << 2 | (palette & 0x01) << 1;
-	const U32 green = (color >> 3 & 0x07) << 2 | (palette >> 1 & 0x01) << 1;
-	const U32 blue = (color >> 6 & 0x03) << 3 | (palette >> 2 & 0x01) << 2;
+	const U32 red = bits<0, 2>(color) << 2 | bits<0>(palette) << 1;
+	const U32 green = bits<3, 5>(color) << 2 | bits<1>(palette) << 1;
+	const U32 blue = bits<6, 7>(color) << 3 | bits<2>(palette) << 2;
 
 	return static_cast<U16>(blue << 10 | green << 5 | red);
 }
@@ -606,9 +610,9 @@ void PPU::renderLine() {
 			color = 0;
 		}
 
-		pixel[0] = outputChannel(color & 0x1F, m_brightness);
-		pixel[1] = outputChannel((color >> 5) & 0x1F, m_brightness);
-		pixel[2] = outputChannel((color >> 10) & 0x1F, m_brightness);
+		pixel[0] = outputChannel(bits<0, 4>(color), m_brightness);
+		pixel[1] = outputChannel(bits<5, 9>(color), m_brightness);
+		pixel[2] = outputChannel(bits<10, 14>(color), m_brightness);
 		pixel[3] = 0xFF;
 		pixel += 4;
 	}
@@ -650,14 +654,14 @@ PPU::LinePixel PPU::backgroundPixel(U32 layer, const LayerFormat& format, U32 hP
 	const U32 mapY = vPosition >> tileShift;
 
 	// In memory, a bigger map is just more 32x32 screens, one after the other
-	U32 entryOffset = (mapY & 0x1F) << 5 | (mapX & 0x1F);
+	U32 entryOffset = bits<0, 4>(mapY) << 5 | bits<0, 4>(mapX);
 
-	if ((mapX & 0x20) && (background.mapSize & 0x01)) {
+	if (bit<5>(mapX) && bit<0>(background.mapSize)) {
 		entryOffset += 0x400;
 	}
 
-	if ((mapY & 0x20) && (background.mapSize & 0x02)) {
-		entryOffset += (background.mapSize & 0x01) ? 0x800 : 0x400;
+	if (bit<5>(mapY) && bit<1>(background.mapSize)) {
+		entryOffset += bit<0>(background.mapSize) ? 0x800 : 0x400;
 	}
 
 	const U16  entry = m_vram[(background.mapAddress + entryOffset) & VRAM_ADDRESS_MASK];
@@ -668,17 +672,17 @@ PPU::LinePixel PPU::backgroundPixel(U32 layer, const LayerFormat& format, U32 hP
 
 	// A 16x16 tile is made of 4 tiles of 8x8: this one, the next one, and the two 16 numbers later
 	if (background.bigTiles) {
-		if (((hPosition & 0x08) != 0) != flipX) {
+		if (bit<3>(hPosition) != flipX) {
 			tile += 1;
 		}
 
-		if (((vPosition & 0x08) != 0) != flipY) {
+		if (bit<3>(vPosition) != flipY) {
 			tile += 16;
 		}
 	}
 
-	const U32 row = flipY ? 7 - (vPosition & 0x07) : vPosition & 0x07;
-	const U32 bit = flipX ? hPosition & 0x07 : 7 - (hPosition & 0x07);
+	const U32 row = flipY ? 7 - bits<0, 2>(vPosition) : bits<0, 2>(vPosition);
+	const U32 bit = flipX ? bits<0, 2>(hPosition) : 7 - bits<0, 2>(hPosition);
 
 	// 2 bits take 8 words per tile, 4 bits take 16
 	const U32 rowAddress = background.tileAddress + (tile & MAP_TILE_MASK) * format.bitsPerPixel * 4 + row;
@@ -690,7 +694,7 @@ PPU::LinePixel PPU::backgroundPixel(U32 layer, const LayerFormat& format, U32 hP
 	}
 
 	const U8  priority = (entry & MAP_PRIORITY) ? format.highPriority : format.lowPriority;
-	const U32 palette = (entry >> 10) & 0x07;
+	const U32 palette = bits<10, 12>(entry);
 
 	// In modes 3 and 4, BG1 can skip CGRAM and build the color from its 8 bits and the palette
 	if (m_directColor && layer == 0 && (m_bgMode == 3 || m_bgMode == 4)) {
@@ -707,19 +711,19 @@ PPU::LinePixel PPU::backgroundPixel(U32 layer, const LayerFormat& format, U32 hP
 // Each sprite takes 4 bytes in the low table and 2 bits in the high one
 PPU::Sprite PPU::readSprite(U32 index) const {
 	const U8*  entry = &m_oam[index * 4];
-	const U32  high = m_oam[OAM_HIGH_TABLE + index / 4] >> ((index & 0x03) * 2);
-	const bool large = (high & 0x02) != 0;
+	const U32  high = m_oam[OAM_HIGH_TABLE + index / 4] >> (bits<0, 1>(index) * 2);
+	const bool large = bit<1>(high);
 
 	Sprite sprite;
 
-	sprite.x = entry[0] | (high & 0x01) << 8;
+	sprite.x = entry[0] | bits<0>(high) << 8;
 	sprite.y = entry[1];
 	sprite.tile = entry[2];
-	sprite.secondTable = (entry[3] & 0x01) != 0;
-	sprite.palette = (entry[3] >> 1) & 0x07;
-	sprite.priority = (entry[3] >> 4) & 0x03;
-	sprite.flipX = (entry[3] & 0x40) != 0;
-	sprite.flipY = (entry[3] & 0x80) != 0;
+	sprite.secondTable = bit<0>(entry[3]);
+	sprite.palette = bits<1, 3>(entry[3]);
+	sprite.priority = bits<4, 5>(entry[3]);
+	sprite.flipX = bit<6>(entry[3]);
+	sprite.flipY = bit<7>(entry[3]);
 	sprite.width = large ? LARGE_WIDTHS[m_spriteSize] : SMALL_WIDTHS[m_spriteSize];
 	sprite.height = large ? LARGE_HEIGHTS[m_spriteSize] : SMALL_HEIGHTS[m_spriteSize];
 
@@ -735,7 +739,7 @@ void PPU::renderSprites() {
 	const U32 line = m_scanline - 1;
 
 	// $2103 bit 7 makes the search start at the sprite the OAM address points to
-	const U32 first = m_oamPriorityRotation ? (m_oamAddress >> 2) & 0x7F : 0;
+	const U32 first = m_oamPriorityRotation ? bits<2, 8>(m_oamAddress) : 0;
 
 	std::array<Sprite, MAX_SPRITES_PER_LINE> onLine {};
 

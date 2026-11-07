@@ -9,6 +9,8 @@
 
 namespace SNES {
 
+using RUNE::KIB;
+
 System::System() {
 	m_bus.attachApu(m_apu);
 	m_bus.attachPpu(m_ppu);

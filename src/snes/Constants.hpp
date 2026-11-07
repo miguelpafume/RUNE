@@ -1,10 +1,17 @@
 #pragma once
 
+#include "rune/Bits.hpp"
 #include "rune/Types.hpp"
 
 namespace SNES {
 
+using RUNE::U16;
 using RUNE::U32;
+
+// Bit helpers, every SNES file reads register fields with them
+using RUNE::bit;
+using RUNE::bits;
+using RUNE::mask;
 
 // NTSC master clock
 constexpr U32 MASTER_CLOCK_HZ = 21477272;
@@ -15,23 +22,25 @@ constexpr U32 CYCLES_PER_SCANLINE = DOTS_PER_SCANLINE * CYCLES_PER_DOT; // 1364
 constexpr U32 SCANLINES_PER_FRAME = 262;
 constexpr U32 CYCLES_PER_FRAME = CYCLES_PER_SCANLINE * SCANLINES_PER_FRAME;
 
-// One dot shorter in odd frames
-constexpr U32 SHORT_SCANLINE = 240;
-
-// Memory access costs, in master cycles
-constexpr U32 CYCLES_FAST = 6;   // internal registers, FastROM
-constexpr U32 CYCLES_SLOW = 8;   // WRAM, SlowROM, cartridge
-constexpr U32 CYCLES_XSLOW = 12; // $4000-$41FF (old-style joypad registers)
-
 constexpr U32 VIDEO_WIDTH = 256;
 constexpr U32 VIDEO_HEIGHT = 224;
 
 // First scanline of vertical blanking in 224-line mode.
 constexpr U32 VBLANK_START_LINE = 225;
 
-// TODO: make this a user setting instead of a compile-time constant
-constexpr float DISPLAY_ASPECT = static_cast<float>(VIDEO_WIDTH) / static_cast<float>(VIDEO_HEIGHT);
+// 65816 address space
 
-constexpr U32 KIB = 1024;
+// page of an address (256 bytes each)
+constexpr U16 PAGE_MASK = mask<8, 15>;
+
+// address inside the bank
+constexpr U16 OFFSET_MASK = mask<0, 15>;
+
+// bank and full 24 bit address
+constexpr U32 BANK_MASK = mask<16, 23>;
+constexpr U32 ADDRESS_MASK = mask<0, 23>;
+
+// WRAM data port, the Bus serves it and the DMA can't copy WRAM through it
+constexpr U16 WMDATA = 0x2180;
 
 } // namespace SNES

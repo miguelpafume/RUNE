@@ -1,9 +1,11 @@
 #pragma once
 
+#include "rune/Bits.hpp"
 #include "rune/Types.hpp"
 
 namespace SNES {
 
+using RUNE::mask;
 using RUNE::U16;
 using RUNE::U32;
 using RUNE::U8;
@@ -12,18 +14,18 @@ using RUNE::U8;
 class Gamepad {
 public:
 	// Same bits as $4218-$4219, B is the first one out. The 4 lowest are always 0
-	static constexpr U16 BUTTON_R = 0x0010;
-	static constexpr U16 BUTTON_L = 0x0020;
-	static constexpr U16 BUTTON_X = 0x0040;
-	static constexpr U16 BUTTON_A = 0x0080;
-	static constexpr U16 BUTTON_Y = 0x4000;
-	static constexpr U16 BUTTON_B = 0x8000;
-	static constexpr U16 BUTTON_RIGHT = 0x0100;
-	static constexpr U16 BUTTON_LEFT = 0x0200;
-	static constexpr U16 BUTTON_DOWN = 0x0400;
-	static constexpr U16 BUTTON_UP = 0x0800;
-	static constexpr U16 BUTTON_START = 0x1000;
-	static constexpr U16 BUTTON_SELECT = 0x2000;
+	static constexpr U16 BUTTON_R = mask<4>;
+	static constexpr U16 BUTTON_L = mask<5>;
+	static constexpr U16 BUTTON_X = mask<6>;
+	static constexpr U16 BUTTON_A = mask<7>;
+	static constexpr U16 BUTTON_Y = mask<14>;
+	static constexpr U16 BUTTON_B = mask<15>;
+	static constexpr U16 BUTTON_RIGHT = mask<8>;
+	static constexpr U16 BUTTON_LEFT = mask<9>;
+	static constexpr U16 BUTTON_DOWN = mask<10>;
+	static constexpr U16 BUTTON_UP = mask<11>;
+	static constexpr U16 BUTTON_START = mask<12>;
+	static constexpr U16 BUTTON_SELECT = mask<13>;
 
 	void setButtons(U16 buttons) { m_buttons = buttons; }
 

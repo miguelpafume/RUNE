@@ -6,7 +6,7 @@
 
 #include "Texture.hpp"
 
-#include "System.hpp"
+#include "snes/System.hpp"
 
 #include <string>
 

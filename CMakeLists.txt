@@ -69,7 +69,7 @@ if (SNES_BUILD_FRONTEND)
 
   add_executable(snes
     src/main.cpp
-    src/snes/SnesApp.cpp
+    src/app/SnesApp.cpp
   )
 
   target_link_libraries(snes PRIVATE snes_core MAGE::mage)

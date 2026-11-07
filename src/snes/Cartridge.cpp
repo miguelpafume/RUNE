@@ -1,5 +1,6 @@
 #include "Cartridge.hpp"
 #include "Bus.hpp"
+#include "Constants.hpp"
 
 #include <bit>
 #include <stdexcept>
@@ -41,12 +42,12 @@ constexpr int SCORE_UNLIKELY = -8;
 constexpr int SCORE_CHECKSUM = 4;
 constexpr int SCORE_MAP_MODE = 2;
 
-constexpr U8 MAP_MODE_FASTROM = 0x10;
+constexpr U8 MAP_MODE_FASTROM = mask<4>;
 constexpr U8 MAP_MODE_LOROM_VALUE = 0x20;
 constexpr U8 MAP_MODE_HIROM_VALUE = 0x21;
 
 constexpr U32 SIZE_UNIT = 1024;
-constexpr U8  SIZE_FIELD_MASK = 0x0F;
+constexpr U8  SIZE_FIELD_MASK = mask<0, 3>;
 constexpr U8  MAX_SRAM_SIZE_FIELD = 8;
 
 constexpr U8 CART_TYPE_COPROCESSOR = 0x03;
@@ -272,13 +273,13 @@ U32 Cartridge::mirror(U32 offset, U32 size) {
 }
 
 U32 Cartridge::sramOffset(U32 address) const {
-	const U32 bank = (address & RUNE::BANK_MASK) >> 16;
+	const U32 bank = (address & BANK_MASK) >> 16;
 	U32       offset {};
 
 	if (m_header.mapMode == MapMode::LoRom) {
-		offset = (bank & 0x0F) << 15 | (address & 0x7FFF);
+		offset = bits<0, 3>(bank) << 15 | bits<0, 14>(address);
 	} else {
-		offset = (bank & 0x1F) << 13 | (address & 0x1FFF);
+		offset = bits<0, 4>(bank) << 13 | bits<0, 12>(address);
 	}
 
 	return offset & (static_cast<U32>(m_sram.size()) - 1);
@@ -342,9 +343,9 @@ void Cartridge::mapRom(Bus& bus, U8 bankFirst, U8 bankLast, U16 addressFirst, U1
 			U32 offset {};
 
 			if (m_header.mapMode == MapMode::LoRom) {
-				offset = (bank & 0x7F) << 15 | (address & 0x7FFF);
+				offset = bits<0, 6>(bank) << 15 | bits<0, 14>(address);
 			} else {
-				offset = (bank & 0x3F) << 16 | address;
+				offset = bits<0, 5>(bank) << 16 | address;
 			}
 
 			// Each block is a whole 4 KiB of the ROM, so mirror runs once per block

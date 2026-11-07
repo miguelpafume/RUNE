@@ -1,6 +1,7 @@
 #include "DMA.hpp"
 
 #include "Bus.hpp"
+#include "Constants.hpp"
 
 namespace SNES {
 
@@ -21,11 +22,11 @@ constexpr U8 NTRL = 0xA;
 constexpr U8 UNUSED = 0xB;
 constexpr U8 UNUSED_MIRROR = 0xF;
 
-constexpr U8 DMAP_MODE_MASK = 0x07;
-constexpr U8 DMAP_FIXED = 0x08;
-constexpr U8 DMAP_DECREMENT = 0x10;
-constexpr U8 DMAP_INDIRECT = 0x40; // HDMA only
-constexpr U8 DMAP_B_TO_A = 0x80;
+constexpr U8 DMAP_MODE_MASK = mask<0, 2>;
+constexpr U8 DMAP_FIXED = mask<3>;
+constexpr U8 DMAP_DECREMENT = mask<4>;
+constexpr U8 DMAP_INDIRECT = mask<6>; // HDMA only
+constexpr U8 DMAP_B_TO_A = mask<7>;
 
 constexpr U32 CYCLES_ALIGN = 8; // the DMA only starts on a multiple of 8
 constexpr U32 CYCLES_START = 8; // once per transfer
@@ -34,11 +35,10 @@ constexpr U32 CYCLES_BYTE = 8;
 constexpr U32 CYCLES_HDMA_START = 8; // once per frame setup and once per line
 
 // The first byte of each table entry: how many lines, and whether to copy on all of them
-constexpr U8 LINE_COUNT_MASK = 0x7F;
-constexpr U8 LINE_REPEAT = 0x80;
+constexpr U8 LINE_COUNT_MASK = mask<0, 6>;
+constexpr U8 LINE_REPEAT = mask<7>;
 
 constexpr U32 B_BUS_BASE = 0x2100;
-constexpr U32 WMDATA = 0x2180;
 
 // What to add to the B address on each byte, repeating every 4 bytes
 constexpr std::array<std::array<U8, 4>, 8> MODE_OFFSETS {{
@@ -64,9 +64,9 @@ static bool validOnBusA(U32 address) {
 static bool isWram(U32 address) { return (address & 0xFE0000) == 0x7E0000 || (address & 0x40E000) == 0x000000; }
 
 U8 DMA::readRegister(U16 address, U8 openBus) const {
-	const Channel& channel = m_channels[(address >> 4) & 0x07];
+	const Channel& channel = m_channels[bits<4, 6>(address)];
 
-	switch (address & 0x0F) {
+	switch (bits<0, 3>(address)) {
 	case DMAP :
 		return channel.control;
 	case BBAD :
@@ -98,9 +98,9 @@ U8 DMA::readRegister(U16 address, U8 openBus) const {
 }
 
 void DMA::writeRegister(U16 address, U8 value) {
-	Channel& channel = m_channels[(address >> 4) & 0x07];
+	Channel& channel = m_channels[bits<4, 6>(address)];
 
-	switch (address & 0x0F) {
+	switch (bits<0, 3>(address)) {
 	case DMAP :
 		channel.control = value;
 		break;

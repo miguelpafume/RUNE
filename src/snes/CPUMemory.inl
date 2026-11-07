@@ -1,7 +1,6 @@
 #pragma once
 
 #include "CPU.hpp"
-#include "rune/Types.hpp"
 
 namespace SNES {
 

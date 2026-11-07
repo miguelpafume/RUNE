@@ -1,4 +1,4 @@
-#include "snes/SnesApp.hpp"
+#include "app/SnesApp.hpp"
 
 #include <iostream>
 

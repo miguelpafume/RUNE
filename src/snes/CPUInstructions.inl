@@ -2,7 +2,6 @@
 
 #include "CPU.hpp"
 #include "CPUMemory.inl"
-#include "rune/Types.hpp"
 
 namespace SNES {
 

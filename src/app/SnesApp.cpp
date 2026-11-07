@@ -11,7 +11,8 @@
 #include <thread>
 #include <utility>
 
-namespace {
+// TODO: make this a user setting instead of a compile-time constant
+constexpr float DISPLAY_ASPECT = static_cast<float>(SNES::VIDEO_WIDTH) / static_cast<float>(SNES::VIDEO_HEIGHT);
 
 struct KeyBinding {
 	int       key;
@@ -33,8 +34,6 @@ constexpr std::array KEY_BINDINGS {
     KeyBinding {GLFW_KEY_ENTER, SNES::Gamepad::BUTTON_START},
     KeyBinding {GLFW_KEY_RIGHT_SHIFT, SNES::Gamepad::BUTTON_SELECT},
 };
-
-} // namespace
 
 SnesApp::SnesApp(const std::string& romPath) {
 	loadPlane();
@@ -161,16 +160,16 @@ void SnesApp::loadPlane() {
 }
 
 void SnesApp::updateAspect(float aspect) {
-	if (aspect > SNES::DISPLAY_ASPECT) {
-		m_left = -aspect / SNES::DISPLAY_ASPECT;
-		m_right = aspect / SNES::DISPLAY_ASPECT;
+	if (aspect > DISPLAY_ASPECT) {
+		m_left = -aspect / DISPLAY_ASPECT;
+		m_right = aspect / DISPLAY_ASPECT;
 		m_top = -1.0f;
 		m_bottom = 1.0f;
 	} else {
 		m_left = -1.0f;
 		m_right = 1.0f;
-		m_top = -SNES::DISPLAY_ASPECT / aspect;
-		m_bottom = SNES::DISPLAY_ASPECT / aspect;
+		m_top = -DISPLAY_ASPECT / aspect;
+		m_bottom = DISPLAY_ASPECT / aspect;
 	}
 
 	m_camera.setOrtohraphicProjection(m_left, m_right, m_top, m_bottom, -1.0f, 1.0f);

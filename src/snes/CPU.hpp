@@ -3,6 +3,7 @@
 #include "rune/Types.hpp"
 
 #include "snes/Bus.hpp"
+#include "snes/Constants.hpp"
 
 #include <array>
 #include <concepts>
@@ -17,11 +18,8 @@ using RUNE::U32;
 using RUNE::U8;
 
 // Masks for the address math
-using RUNE::ADDRESS_MASK;
 using RUNE::HIGH_BYTE_MASK;
 using RUNE::LOW_BYTE_MASK;
-using RUNE::OFFSET_MASK;
-using RUNE::PAGE_MASK;
 
 class CPU;
 
@@ -82,14 +80,14 @@ private:
 	// Constants
 
 	// Status registers (P) bits
-	static constexpr U8 FLAG_C = 0x01; // Carry
-	static constexpr U8 FLAG_Z = 0x02; // Zero
-	static constexpr U8 FLAG_I = 0x04; // IRQ disable
-	static constexpr U8 FLAG_D = 0x08; // Decimal
-	static constexpr U8 FLAG_X = 0x10; // Index width 8 bits (Break in the pushed copy, emulation mode)
-	static constexpr U8 FLAG_M = 0x20; // Accumulator width 8 bits
-	static constexpr U8 FLAG_V = 0x40; // Overflow
-	static constexpr U8 FLAG_N = 0x80; // Negative
+	static constexpr U8 FLAG_C = mask<0>; // Carry
+	static constexpr U8 FLAG_Z = mask<1>; // Zero
+	static constexpr U8 FLAG_I = mask<2>; // IRQ disable
+	static constexpr U8 FLAG_D = mask<3>; // Decimal
+	static constexpr U8 FLAG_X = mask<4>; // Index width 8 bits (Break in the pushed copy, emulation mode)
+	static constexpr U8 FLAG_M = mask<5>; // Accumulator width 8 bits
+	static constexpr U8 FLAG_V = mask<6>; // Overflow
+	static constexpr U8 FLAG_N = mask<7>; // Negative
 
 	// Interrupt vectors, all in bank $00.
 	// Emulation mode doesn't have a BRK vector of its own, it shares the IRQ vector
@@ -122,7 +120,7 @@ private:
 	// Top bit for the width, used for the N flag
 	template <bool W8>
 	static constexpr U16 signBit() {
-		return W8 ? 0x0080 : 0x8000;
+		return W8 ? mask<7> : mask<15>;
 	}
 
 	enum class Index {

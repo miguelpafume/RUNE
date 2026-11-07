@@ -11,9 +11,7 @@
 
 namespace SNES {
 
-// The 65816 uses 24 address lines, so anything above bank $FF wraps
-using RUNE::ADDRESS_MASK;
-
+// ADDRESS_MASK: the 65816 uses 24 address lines, so anything above bank $FF wraps
 constexpr std::size_t TEST_MEMORY_SIZE = std::size_t {ADDRESS_MASK} + 1; // 16 MB, flat
 
 constexpr std::size_t EXPECTED_DIRTY_PER_CASE = 16;
@@ -21,12 +19,11 @@ constexpr std::size_t EXPECTED_CYCLES_PER_CASE = 16;
 
 constexpr U32 BLOCK_OFFSET_MASK = Bus::BLOCK_SIZE - 1;
 
-constexpr U32 WRAM_START = 0x7E0000;       // Banks $7E-$7F
-constexpr U32 WRAM_MIRROR_SIZE = 0x2000;   // the first 8 KiB also show up at $0000-$1FFF
-constexpr U32 WRAM_ADDRESS_MASK = 0x1FFFF; // the port address has 17 bits
+constexpr U32 WRAM_START = 0x7E0000;           // Banks $7E-$7F
+constexpr U32 WRAM_MIRROR_SIZE = 0x2000;       // the first 8 KiB also show up at $0000-$1FFF
+constexpr U32 WRAM_ADDRESS_MASK = mask<0, 16>; // the port address has 17 bits
 
-// Real hardware starts WRAM with garbage. bsnes and MesenCE fill it with random bytes,
-// but then two runs of the same ROM could differ, so we use snes9x's fixed $55
+// Real hardware starts WRAM with garbage
 constexpr U8 WRAM_POWER_ON_VALUE = 0x55;
 
 // External registers, all at $21xx
@@ -34,9 +31,8 @@ constexpr U16 PPU_FIRST = 0x2100;
 constexpr U16 PPU_LAST = 0x213F;
 constexpr U16 APU_FIRST = 0x2140; // four ports, mirrored up to $217F
 constexpr U16 APU_LAST = 0x217F;
-constexpr U16 APU_PORT_MASK = 0x0003;
+constexpr U16 APU_PORT_MASK = mask<0, 1>;
 
-constexpr U16 WMDATA = 0x2180;
 constexpr U16 WMADDL = 0x2181;
 constexpr U16 WMADDM = 0x2182;
 constexpr U16 WMADDH = 0x2183;
@@ -70,29 +66,29 @@ constexpr U16 RDMPYH = 0x4217;
 constexpr U16 JOY_FIRST = 0x4218; // 4 controllers x 2 bytes
 constexpr U16 JOY_LAST = 0x421F;
 
-constexpr U8 NMITIMEN_NMI = 0x80;
-constexpr U8 NMITIMEN_V_IRQ = 0x20;
-constexpr U8 NMITIMEN_H_IRQ = 0x10;
-constexpr U8 NMITIMEN_AUTO_JOYPAD = 0x01;
+constexpr U8 NMITIMEN_AUTO_JOYPAD = mask<0>;
+constexpr U8 NMITIMEN_H_IRQ = mask<4>;
+constexpr U8 NMITIMEN_V_IRQ = mask<5>;
+constexpr U8 NMITIMEN_NMI = mask<7>;
 
-constexpr U8 MEMSEL_FASTROM = 0x01;
+constexpr U8 MEMSEL_FASTROM = mask<0>;
 
-constexpr U8 RDNMI_FLAG = 0x80;
-constexpr U8 RDNMI_OPEN_BUS_MASK = 0x70;
+constexpr U8 RDNMI_FLAG = mask<7>;
+constexpr U8 RDNMI_OPEN_BUS_MASK = mask<4, 6>;
 constexpr U8 CPU_VERSION = 0x02; // the value bsnes and MesenCE report
 
-constexpr U8 TIMEUP_FLAG = 0x80;
-constexpr U8 TIMEUP_OPEN_BUS_MASK = 0x7F;
+constexpr U8 TIMEUP_FLAG = mask<7>;
+constexpr U8 TIMEUP_OPEN_BUS_MASK = mask<0, 6>;
 
-constexpr U8 HVBJOY_VBLANK = 0x80;
-constexpr U8 HVBJOY_HBLANK = 0x40;
-constexpr U8 HVBJOY_JOYPAD_BUSY = 0x01;
-constexpr U8 HVBJOY_OPEN_BUS_MASK = 0x3E;
+constexpr U8 HVBJOY_VBLANK = mask<7>;
+constexpr U8 HVBJOY_HBLANK = mask<6>;
+constexpr U8 HVBJOY_JOYPAD_BUSY = mask<0>;
+constexpr U8 HVBJOY_OPEN_BUS_MASK = mask<1, 5>;
 
-constexpr U8 JOYSER0_LATCH = 0x01;
-constexpr U8 JOYSER0_OPEN_BUS_MASK = 0xFC;
-constexpr U8 JOYSER1_OPEN_BUS_MASK = 0xE0;
-constexpr U8 JOYSER1_GROUNDED = 0x1C; // these pins are tied to ground and read as 1
+constexpr U8 JOYSER0_LATCH = mask<0>;
+constexpr U8 JOYSER0_OPEN_BUS_MASK = mask<2, 7>;
+constexpr U8 JOYSER1_OPEN_BUS_MASK = mask<5, 7>;
+constexpr U8 JOYSER1_GROUNDED = mask<2, 4>; // these pins are tied to ground and read as 1
 
 // H-Blank starts at the end of one line and lasts into the next
 constexpr U32 HBLANK_START = 1096;
@@ -101,6 +97,11 @@ constexpr U32 HBLANK_END = 2;
 // The auto joypad read starts on an edge between H = 130 and H = 384 of the first V-Blank line
 constexpr U32 JOYPAD_START_FIRST = 130;
 constexpr U32 JOYPAD_START_LAST = 384;
+
+// Memory access costs, in master cycles
+constexpr U32 CYCLES_FAST = 6;   // internal registers, FastROM
+constexpr U32 CYCLES_SLOW = 8;   // WRAM, SlowROM, cartridge
+constexpr U32 CYCLES_XSLOW = 12; // $4000-$41FF (old-style joypad registers)
 
 constexpr U32 CYCLES_INTERNAL = CYCLES_FAST; // cycles that don't touch memory take 6 too
 
@@ -119,8 +120,8 @@ constexpr U32 DRAM_REFRESH_ALU_STEPS = 5; // the multiplier and divider keep goi
 constexpr U32 V_IRQ_POSITION = 10;
 constexpr U32 H_IRQ_POSITION = 14; // plus 4 cycles per dot of HTIME
 constexpr U32 NO_IRQ = U32_MAX;
-constexpr U32 IRQ_BLOCKED_POSITION = 6; // in line 0, both counters still read 0 here
-constexpr U8  HV_TIME_HIGH_MASK = 0x01; // HTIME and VTIME have 9 bits
+constexpr U32 IRQ_BLOCKED_POSITION = 6;    // in line 0, both counters still read 0 here
+constexpr U8  HV_TIME_HIGH_MASK = mask<0>; // HTIME and VTIME have 9 bits
 
 constexpr U32 MULTIPLY_STEPS = 8;
 constexpr U32 DIVIDE_STEPS = 16;
@@ -231,7 +232,7 @@ void Bus::joypadEdge() {
 			if ((m_joypadStep & 1) == 0) {
 				m_joypadBits[port] = m_ports[port]->data();
 			} else {
-				m_joy[port] = static_cast<U16>(m_joy[port] << 1 | (m_joypadBits[port] & 0x01));
+				m_joy[port] = static_cast<U16>(m_joy[port] << 1 | bits<0>(m_joypadBits[port]));
 			}
 		}
 	}
@@ -345,7 +346,7 @@ void Bus::aluStep() {
 	m_aluSteps--;
 
 	if (!m_dividing) {
-		if (m_rddiv & 1) {
+		if (bit<0>(m_rddiv)) {
 			m_rdmpy = static_cast<U16>(m_rdmpy + m_aluShift);
 		}
 
@@ -471,7 +472,7 @@ U32 Bus::accessCycles(U32 address) const {
 		return (address & 0x800000) && m_fastRom ? CYCLES_FAST : CYCLES_SLOW;
 	}
 
-	const U16 offset = address & 0xFFFF;
+	const U16 offset = address & OFFSET_MASK;
 
 	if (offset < 0x2000 || offset >= 0x6000) {
 		return CYCLES_SLOW;
@@ -698,7 +699,7 @@ void Bus::mapSystemArea(U8 bankFirst, U8 bankLast) {
 // Chips outside the CPU only see the low byte of the address, so they answer at $21xx
 // The rest of $2000-$3FFF reaches nothing and reads as open bus
 U8 Bus::readExternalRegister(U32 address) {
-	const U16 offset = address & 0xFFFF;
+	const U16 offset = address & OFFSET_MASK;
 
 	if (offset >= PPU_FIRST && offset <= PPU_LAST) {
 		return m_ppu->readRegister(offset, m_openBus);
@@ -720,7 +721,7 @@ U8 Bus::readExternalRegister(U32 address) {
 }
 
 void Bus::writeExternalRegister(U32 address, U8 value) {
-	const U16 offset = address & 0xFFFF;
+	const U16 offset = address & OFFSET_MASK;
 
 	if (offset >= PPU_FIRST && offset <= PPU_LAST) {
 		m_ppu->writeRegister(offset, value);
@@ -756,7 +757,7 @@ void Bus::writeExternalRegister(U32 address, U8 value) {
 }
 
 U8 Bus::readCpuRegister(U32 address) {
-	const U16 offset = address & 0xFFFF;
+	const U16 offset = address & OFFSET_MASK;
 
 	if (offset == JOYSER0) {
 		return static_cast<U8>((m_openBus & JOYSER0_OPEN_BUS_MASK) | m_ports[0]->data());
@@ -834,7 +835,7 @@ U8 Bus::readCpuRegister(U32 address) {
 }
 
 void Bus::writeCpuRegister(U32 address, U8 value) {
-	const U16 offset = address & 0xFFFF;
+	const U16 offset = address & OFFSET_MASK;
 
 	// Writes to $4017 do nothing, $4016 bit 0 already reaches both ports
 	if (offset == JOYSER0) {
